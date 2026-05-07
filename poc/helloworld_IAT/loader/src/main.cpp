@@ -130,12 +130,12 @@ typedef struct _IMAGE_IMPORT_DESCRIPTOR
 	union
 	{
 		DWORD Characteristics;
-		DWORD OriginalFirstThunk; // INT
+		DWORD OriginalFirstThunk;		// INT (Import Name Table), read only. It points to an array that stores the names of the functions to be used.
 	} DUMMYUNIONNAME;
 	DWORD TimeDateStamp;
 	DWORD ForwarderChain;
-	DWORD Name;                   // RVA to DLL name
-	DWORD FirstThunk;             // IAT
+	DWORD Name;							// RVA to DLL name, e.g. USER32.dll
+	DWORD FirstThunk;					// IAT (Import Address Table), can write. In disk which is same with INT; in memory we need to replace it (Windows functions) with our Linux functions address.
 } IMAGE_IMPORT_DESCRIPTOR;
 
 typedef struct _IMAGE_THUNK_DATA64
@@ -147,12 +147,15 @@ typedef struct _IMAGE_THUNK_DATA64
 		QWORD Ordinal;
 		QWORD AddressOfData;
 	} u1;
+	// Why union
+	// Phase A (before processing): It equals AddressOfData, which is a memory offset (RVA) pointing to the function name string.
+	// Phase B (after hijacking): It equals Function, which is a pure function pointer.
 } IMAGE_THUNK_DATA64;
 
 typedef struct _IMAGE_IMPORT_BY_NAME
 {
-	WORD Hint;
-	char Name[1]; // Variable size
+	WORD Hint;					// Optimized fields to speed up the search
+	char Name[1];				// Variable size, such as "MessageBoxA\0"
 } IMAGE_IMPORT_BY_NAME;
 
 #pragma pack(pop)
@@ -307,7 +310,10 @@ int main(int argc, char** argv)
 	}
 
 	// ----- 5. Patch IAT (Import Address Table) -----
-	DWORD import_rva = nt_headers->OptionalHeader.DataDirectory[1].VirtualAddress; // Index 1 is Import Dir
+
+	// The exported table is DataDirectory[0], while the imported table is always DataDirectory[1]
+	DWORD import_rva = nt_headers->OptionalHeader.DataDirectory[1].VirtualAddress;
+
 	if (import_rva == 0)
 	{
 		printf("[-] No Import Directory found.\n");
@@ -317,16 +323,22 @@ int main(int argc, char** argv)
 		IMAGE_IMPORT_DESCRIPTOR* import_desc = (IMAGE_IMPORT_DESCRIPTOR*)(mapped_base + import_rva);
 		printf("\n[*] Resolving Import Address Table (IAT)...\n");
 
+		// Iterate through each external dependency library eg. USER32.dll, KERNEL32.dll etc.
+		// Microsoft requires that the last element of an array must be all zeros (serving as a terminator);
+		// Therefore, if Name is not 0, it means there are still dependent DLLs.
 		while (import_desc->Name != 0)
 		{
 			char* dll_name = (char*)(mapped_base + import_desc->Name);
 			printf("    -> Loading Imports from: %s\n", dll_name);
 
+			// **Read** INT to know what function it wants
 			IMAGE_THUNK_DATA64* orig_thunk = (IMAGE_THUNK_DATA64*)(mapped_base + import_desc->DUMMYUNIONNAME.OriginalFirstThunk);
+			// **Write** Linux functions to it
 			IMAGE_THUNK_DATA64* first_thunk = (IMAGE_THUNK_DATA64*)(mapped_base + import_desc->FirstThunk);
 
 			for (int i = 0; orig_thunk[i].u1.AddressOfData != 0; i++)
 			{
+				// Handle "Import by Ordinal", just ignore...
 				if (orig_thunk[i].u1.Ordinal & 0x8000000000000000ULL)
 				{
 					printf("        [!] Skipping Ordinal Import\n");
