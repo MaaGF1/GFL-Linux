@@ -1,6 +1,12 @@
 /**
  * @file poc/helloworld_IAT/dll/src/main.cpp
- * @brief DLL loader for local Windows test.
+ * @author @SwordofMorning
+ * @brief DLL loader on Windows
+ * @version 0.1
+ * @date 2026-05-07
+ * 
+ * @copyright Copyright (c) 2026
+ * 
  */
 
 #include <windows.h>

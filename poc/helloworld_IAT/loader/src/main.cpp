@@ -1,6 +1,12 @@
 /**
  * @file poc/helloworld_IAT/loader/src/main.cpp
- * @brief PE Loader with IAT Hooking and Reverse ABI Thunks.
+ * @author @SwordofMorning
+ * @brief DLL loader on linux.
+ * @version 0.1
+ * @date 2026-05-07
+ * 
+ * @copyright Copyright (c) 2026
+ * 
  */
 
 #include <stdio.h>

@@ -1,4 +1,4 @@
-# poc/helloworld/loader/CMakeLists.txt
+# poc/helloworld_IAT/loader/CMakeLists.txt
 
 PROJECT(GFL_Loader_PoC)
 CMAKE_MINIMUM_REQUIRED(VERSION 3.5)

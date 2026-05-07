@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    poc/helloworld/dll/build.ps1
+    poc/helloworld_IAT/dll/build.ps1
     Build script for Windows DLL and Test Native Loader.
 #>
 

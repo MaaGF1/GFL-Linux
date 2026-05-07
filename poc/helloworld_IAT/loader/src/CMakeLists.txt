@@ -1,4 +1,4 @@
-# poc/helloworld/loader/src/CMakeLists.txt
+# poc/helloworld_IAT/loader/src/CMakeLists.txt
 
 FILE(GLOB_RECURSE SRC_LIST ./*.cpp)
 
