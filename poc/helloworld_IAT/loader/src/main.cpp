@@ -301,11 +301,23 @@ int main(int argc, char** argv)
 	);
 
 	// Traverse all sections
+	printf("[*] Mapping %d Sections...\n", nt_headers->FileHeader.NumberOfSections);
 	for (int i = 0; i < nt_headers->FileHeader.NumberOfSections; i++)
 	{
+		// Create a null-terminated string for safe printing
+		char sec_name[9] = {0};
+		memcpy(sec_name, section[i].Name, 8);
+
 		if (section[i].SizeOfRawData > 0)
 		{
-			memcpy(mapped_base + section[i].VirtualAddress, raw_data + section[i].PointerToRawData, section[i].SizeOfRawData);
+			memcpy(mapped_base + section[i].VirtualAddress, 
+				   raw_data + section[i].PointerToRawData, 
+				   section[i].SizeOfRawData);
+			printf("	-> Mapped Section %-8s | RVA: 0x%04X | Size: %d\n", 
+				   sec_name, section[i].VirtualAddress, section[i].SizeOfRawData);
+		} else
+		{
+			printf("	-> Skipped Section %-8s (No Raw Data)\n", sec_name);
 		}
 	}
 
