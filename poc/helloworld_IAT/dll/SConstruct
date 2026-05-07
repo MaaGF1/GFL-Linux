@@ -1,0 +1,58 @@
+# poc/helloworld_IAT/dll/SConstruct
+
+import os
+from SCons.Script import *
+
+# =========================================================================
+# SCONS ENVIRONMENT SETUP
+# =========================================================================
+env = Environment(TARGET_ARCH='amd64')
+
+# Fetch the mode argument, default to 'release'
+mode = ARGUMENTS.get('mode', 'release')
+
+if mode == 'debug':
+    # Debug mode: Disable optimization (/Od)
+    env.Append(CCFLAGS=['/Od', '/EHsc', '/W3'])
+else:
+    # Release mode: Maximize speed optimization (/O2)
+    env.Append(CCFLAGS=['/O2', '/EHsc', '/W3'])
+
+env.Append(LIBS=['user32', 'kernel32'])
+
+# =========================================================================
+# DIRECTORY ISOLATION (Out-of-source build)
+# =========================================================================
+# Map 'src' directory to 'build/obj'. 
+# 'duplicate=0' means SCons will compile from src without copying files over.
+VariantDir('build/obj', 'src', duplicate=0)
+
+bin_dir = 'build/bin'
+
+# =========================================================================
+# 1. Build DLL
+# =========================================================================
+# Notice we source from 'build/obj' instead of 'src'
+dll_sources = ['build/obj/lib/helloworld.cpp']
+
+# Omitting '.dll' lets SCons automatically handle .dll, .lib, and .exp generation safely
+dll_target = os.path.join(bin_dir, 'helloworld')
+dll = env.SharedLibrary(target=dll_target, source=dll_sources)
+
+# =========================================================================
+# 2. Build Windows Test EXE
+# =========================================================================
+exe_sources = ['build/obj/main.cpp']
+
+exe_env = env.Clone()
+exe_env.Append(LIBPATH=[bin_dir])
+exe_env.Append(LIBS=['helloworld']) # Links against helloworld.lib
+
+exe_target = os.path.join(bin_dir, 'helloworld_test')
+exe = exe_env.Program(target=exe_target, source=exe_sources)
+
+# Ensure DLL (and its .lib) is fully generated before trying to link the EXE
+Depends(exe, dll)
+
+# Default target
+Default(dll, exe)
