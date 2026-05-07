@@ -200,12 +200,15 @@ extern "C" void MockUnhandledImport()
 
 // 2. Assembly Trampolines (Reverse Win64 -> SysV)
 // Using GCC global assembly blocks
+
+// Linux: RDI, RSI, RDX, RCX, R8, R9
+// Windows: RCX(a), RDX(b), R8, R9
 __asm__(
 	".text\n"
 	".global Thunk_OutputDebugStringA\n"
 	"Thunk_OutputDebugStringA:\n"
-	"    mov %rcx, %rdi\n"         // Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
-	"    jmp MockOutputDebugStringA\n" // Tail call
+	"    mov %rcx, %rdi\n"				// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
+	"    jmp MockOutputDebugStringA\n"	// Tail call
 );
 
 __asm__(
