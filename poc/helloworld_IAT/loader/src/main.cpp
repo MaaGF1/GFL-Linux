@@ -29,13 +29,15 @@ typedef uint64_t QWORD;
 
 #pragma pack(push, 1)
 
-typedef struct _IMAGE_DOS_HEADER {
+typedef struct _IMAGE_DOS_HEADER
+{
 	WORD e_magic;
 	BYTE reserved[58];
 	DWORD e_lfanew;
 } IMAGE_DOS_HEADER;
 
-typedef struct _IMAGE_FILE_HEADER {
+typedef struct _IMAGE_FILE_HEADER
+{
 	WORD Machine;
 	WORD NumberOfSections;
 	DWORD TimeDateStamp;
@@ -45,12 +47,14 @@ typedef struct _IMAGE_FILE_HEADER {
 	WORD Characteristics;
 } IMAGE_FILE_HEADER;
 
-typedef struct _IMAGE_DATA_DIRECTORY {
+typedef struct _IMAGE_DATA_DIRECTORY
+{
 	DWORD VirtualAddress;
 	DWORD Size;
 } IMAGE_DATA_DIRECTORY;
 
-typedef struct _IMAGE_OPTIONAL_HEADER64 {
+typedef struct _IMAGE_OPTIONAL_HEADER64
+{
 	WORD Magic;
 	BYTE MajorLinkerVersion;
 	BYTE MinorLinkerVersion;
@@ -83,13 +87,15 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
 	IMAGE_DATA_DIRECTORY DataDirectory[16];
 } IMAGE_OPTIONAL_HEADER64;
 
-typedef struct _IMAGE_NT_HEADERS64 {
+typedef struct _IMAGE_NT_HEADERS64
+{
 	DWORD Signature;
 	IMAGE_FILE_HEADER FileHeader;
 	IMAGE_OPTIONAL_HEADER64 OptionalHeader;
 } IMAGE_NT_HEADERS64;
 
-typedef struct _IMAGE_SECTION_HEADER {
+typedef struct _IMAGE_SECTION_HEADER
+{
 	BYTE Name[8];
 	DWORD VirtualSize;
 	DWORD VirtualAddress;
@@ -102,7 +108,8 @@ typedef struct _IMAGE_SECTION_HEADER {
 	DWORD Characteristics;
 } IMAGE_SECTION_HEADER;
 
-typedef struct _IMAGE_EXPORT_DIRECTORY {
+typedef struct _IMAGE_EXPORT_DIRECTORY
+{
 	DWORD Characteristics;
 	DWORD TimeDateStamp;
 	WORD MajorVersion;
@@ -116,10 +123,12 @@ typedef struct _IMAGE_EXPORT_DIRECTORY {
 	DWORD AddressOfNameOrdinals;
 } IMAGE_EXPORT_DIRECTORY;
 
-// --- New IAT Structures ---
+// --- IAT Structures ---
 
-typedef struct _IMAGE_IMPORT_DESCRIPTOR {
-	union {
+typedef struct _IMAGE_IMPORT_DESCRIPTOR
+{
+	union
+	{
 		DWORD Characteristics;
 		DWORD OriginalFirstThunk; // INT
 	} DUMMYUNIONNAME;
@@ -129,8 +138,10 @@ typedef struct _IMAGE_IMPORT_DESCRIPTOR {
 	DWORD FirstThunk;             // IAT
 } IMAGE_IMPORT_DESCRIPTOR;
 
-typedef struct _IMAGE_THUNK_DATA64 {
-	union {
+typedef struct _IMAGE_THUNK_DATA64
+{
+	union
+	{
 		QWORD ForwarderString;
 		QWORD Function;
 		QWORD Ordinal;
@@ -138,7 +149,8 @@ typedef struct _IMAGE_THUNK_DATA64 {
 	} u1;
 } IMAGE_THUNK_DATA64;
 
-typedef struct _IMAGE_IMPORT_BY_NAME {
+typedef struct _IMAGE_IMPORT_BY_NAME
+{
 	WORD Hint;
 	char Name[1]; // Variable size
 } IMAGE_IMPORT_BY_NAME;
@@ -233,12 +245,17 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	// ----- 1. Read & 2. Parse & 3. Allocate & 4. Map Sections -----
-	// (Consolidated for brevity, same logic as your poc/helloworld)
+	// ----- 1. Read raw DLL file into memory -----
+
 	int fd = open(argv[1], O_RDONLY);
-	if (fd < 0) { perror("[-] Failed to open DLL"); return 1; }
-	
-	struct stat st; fstat(fd, &st);
+	if (fd < 0)
+	{
+		perror("[-] Failed to open DLL");
+		return 1;
+	}
+
+	struct stat st;
+	fstat(fd, &st);
 	BYTE* raw_data = (BYTE*)malloc(st.st_size);
 	if (read(fd, raw_data, st.st_size) < 0)
 	{
@@ -248,17 +265,36 @@ int main(int argc, char** argv)
 	}
 	close(fd);
 
+	// ----- 2. Parse PE Headers -----
+
+	// Read raw file
 	IMAGE_DOS_HEADER* dos_header = (IMAGE_DOS_HEADER*)raw_data;
+	// Offset the pointer to NT
 	IMAGE_NT_HEADERS64* nt_headers = (IMAGE_NT_HEADERS64*)(raw_data + dos_header->e_lfanew);
 
+	// ----- 3. Allocate executable memory for the mapped image -----
+
+	// To match the CPU's page alignment (typically 4KB), it will be stretched, thus we use `SizeOfImage`
 	DWORD image_size = nt_headers->OptionalHeader.SizeOfImage;
+	// Allocate memory with `PROT_EXEC`
 	BYTE* mapped_base = (BYTE*)mmap(NULL, image_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+	printf("[+] Allocated %u bytes of executable memory at %p\n", image_size, mapped_base);
+
+	// ----- 4. Map PE Headers -----
+
+	// Copy NT image to mapped_base
 	memcpy(mapped_base, raw_data, nt_headers->OptionalHeader.SizeOfHeaders);
 
+	// Safely calculate Section Header starting point
 	IMAGE_SECTION_HEADER* section = (IMAGE_SECTION_HEADER*)(
-		(BYTE*)nt_headers + 4 + sizeof(IMAGE_FILE_HEADER) + nt_headers->FileHeader.SizeOfOptionalHeader
+		(BYTE*)nt_headers + 
+		4 + // Signature
+		sizeof(IMAGE_FILE_HEADER) + 
+		nt_headers->FileHeader.SizeOfOptionalHeader
 	);
-	
+
+	// Traverse all sections
 	for (int i = 0; i < nt_headers->FileHeader.NumberOfSections; i++)
 	{
 		if (section[i].SizeOfRawData > 0)
