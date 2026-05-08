@@ -118,7 +118,7 @@ function cf()
 {
     cd ${ProjectPath}
     echo_info "run Clang-Format."
-    find src -name '*.cpp' -o -name '*.h' -o -name '*.c' | \
+    find src -name '*.cpp' -o -name '*.h' | \
         xargs -I{} bash -c 'clang-format-16 -style=file {} | diff -u -L "{}" -L "{}" {} -' > .clang-format.diff
 }
 
