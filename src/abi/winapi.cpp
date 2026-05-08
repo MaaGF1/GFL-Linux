@@ -381,14 +381,14 @@ extern "C" void Thunk_Real_GetSystemTimeAsFileTime();
 __asm__(
 	".global Thunk_Real_GetCurrentThreadId\n"
 	"Thunk_Real_GetCurrentThreadId:\n"
-	"	jmp Impl_GetCurrentThreadId\n"		// No params to pass, just call it
+	"	jmp Impl_GetCurrentThreadId\n"		// No params
 );
 extern "C" void Thunk_Real_GetCurrentThreadId();
 
 __asm__(
 	".global Thunk_Real_GetCurrentProcessId\n"
 	"Thunk_Real_GetCurrentProcessId:\n"
-	"	jmp Impl_GetCurrentProcessId\n"		// No params to pass, just call it
+	"	jmp Impl_GetCurrentProcessId\n"		// No params
 );
 extern "C" void Thunk_Real_GetCurrentProcessId();
 
@@ -403,7 +403,7 @@ extern "C" void Thunk_Real_QueryPerformanceCounter();
 __asm__(
 	".global Thunk_Real_QueryPerformanceFrequency\n"
 	"Thunk_Real_QueryPerformanceFrequency:\n"
-	"	mov %rcx, %rdi\n"
+	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
 	"	jmp Impl_QueryPerformanceFrequency\n"
 );
 extern "C" void Thunk_Real_QueryPerformanceFrequency();
@@ -440,7 +440,7 @@ extern "C" void Thunk_Real_InitializeCriticalSectionEx();
 __asm__(
 	".global Thunk_Real_EnterCriticalSection\n"
 	"Thunk_Real_EnterCriticalSection:\n"
-	"	mov %rcx, %rdi\n"
+	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
 	"	jmp Impl_EnterCriticalSection\n"
 );
 extern "C" void Thunk_Real_EnterCriticalSection();
@@ -448,7 +448,7 @@ extern "C" void Thunk_Real_EnterCriticalSection();
 __asm__(
 	".global Thunk_Real_LeaveCriticalSection\n"
 	"Thunk_Real_LeaveCriticalSection:\n"
-	"	mov %rcx, %rdi\n"
+	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
 	"	jmp Impl_LeaveCriticalSection\n"
 );
 extern "C" void Thunk_Real_LeaveCriticalSection();
@@ -456,7 +456,7 @@ extern "C" void Thunk_Real_LeaveCriticalSection();
 __asm__(
 	".global Thunk_Real_DeleteCriticalSection\n"
 	"Thunk_Real_DeleteCriticalSection:\n"
-	"	mov %rcx, %rdi\n"
+	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
 	"	jmp Impl_DeleteCriticalSection\n"
 );
 extern "C" void Thunk_Real_DeleteCriticalSection();
@@ -464,7 +464,7 @@ extern "C" void Thunk_Real_DeleteCriticalSection();
 __asm__(
 	".global Thunk_Real_FreeLibrary\n"
 	"Thunk_Real_FreeLibrary:\n"
-	"	mov %rcx, %rdi\n"
+	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
 	"	jmp Impl_FreeLibrary\n"
 );
 extern "C" void Thunk_Real_FreeLibrary();
