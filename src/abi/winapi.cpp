@@ -10,9 +10,62 @@
 typedef uint32_t DWORD;
 typedef uint64_t QWORD;
 
-// =========================================================================
-// 1. C++ Implementations (SysV ABI: args in RDI, RSI, RDX...)
-// =========================================================================
+/**
+ * =========================================================================
+ * 
+ * @par C++ Implementations 
+ * 
+ * @note Windows x64 ABI
+ * 1. Parameter registers (sequential parameter passing): 
+ *      Int/Pointer: RCX, RDX, R8, R9;
+ *      Float/Vector: XMM0, XMM1, XMM2, XMM3;
+ *      More than 4, use a stack to pass them.
+ * 2. Return value registers:
+ *      2.1 RAX: Integer/pointer
+ *      2.2 XMM0: Float
+ * 3. Volatile registers
+ * The function can be modified at will; the caller must protect it themselves.
+ *      3.1 RAX, RCX, RDX, R8, R9, R10, R11
+ *      3.2 XMM0–XMM5
+ * 4. Non-volatile registers
+ * The function must be saved before use and restored before returning.
+ *      4.1 RBX, RBP, RDI, RSI, RSP, R12, R13, R14, R15
+ *      4.2 XMM6–XMM15
+ * 5. Special registers
+ *      5.1 RSP: Stack
+ *      5.2 RBP: Base
+ *      5.3 RIP: Instruction
+ *      5.4 RFLAGS: Status Flags
+ *      5.5 XMM: Float/Vector
+ *      
+ * @note System V AMD64 ABI
+ * 1. Integer/pointer parameter registers (sequential parameter passing): 
+ *      RDI, RSI, RDX, RCX, R8, R9
+ *      More than 6, use a stack to pass them.
+ * 2. Float parameter registers (sequential parameter passing): 
+ *      XMM0–XMM7
+ * 3. Return value registers:
+ *      3.1 RAX: Integer/pointer
+ *      3.2 RDX: Helper, the high 64 bits of the 128-bit return value
+ *      3.3 XMM0: Float/Vector
+ *      3.4 XMM1: Helper
+ * 4. Volatile registers
+ *      4.1 RAX, RCX, RDX, RSI, RDI, R8, R9, R10, R11
+ *      4.2 XMM0–XMM11
+ *      4.3 ST0–ST7 (X87 FPU)
+ * 5. Non-volatile registers
+ *      5.1 RBX, RBP, R12, R13, R14, R15
+ *      5.2 RIP, keep alignment
+ *      5.3 XMM12–XMM15
+ * 6. Special registers
+ *      6.1 RAX: Also used for system call numbers/return values
+ *      6.2 R10: Replaces RCX during system calls (because syscalls would break RCX/R11)
+ *      6.3 R11: Save RFLAGS during system call
+ *      6.4 RSP: Stack pointer, must be 16-byte aligned when entering/exiting functions
+ *      6.5 RBP: Base
+ * 
+ * =========================================================================
+ */
 
 // Windows API: void GetSystemTimeAsFileTime(LPFILETIME lpSystemTimeAsFileTime)
 extern "C" void Impl_GetSystemTimeAsFileTime(DWORD* lpSystemTimeAsFileTime)
