@@ -40,7 +40,7 @@ __asm__(
     ".text\n"
     ".global Thunk_Real_GetSystemTimeAsFileTime\n"
     "Thunk_Real_GetSystemTimeAsFileTime:\n"
-    "    mov %rcx, %rdi\n"         // Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
+    "    mov %rcx, %rdi\n" // Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
     "    jmp Impl_GetSystemTimeAsFileTime\n"
 );
 extern "C" void Thunk_Real_GetSystemTimeAsFileTime();

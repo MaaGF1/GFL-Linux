@@ -1,8 +1,9 @@
 # Gather source files
 SET(SOURCES
     main.cpp
-    autogen_stubs.S
-    winapi.cpp
+    # ABI
+    abi/autogen_stubs.S
+    abi/winapi.cpp
 )
 
 # Define executable

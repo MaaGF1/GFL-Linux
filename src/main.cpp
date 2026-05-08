@@ -27,8 +27,8 @@
 #include <asm/prctl.h>
 #include <sys/syscall.h>
 
-#include "autogen_stubs.h"
-#include "winapi.h"
+#include "abi/autogen_stubs.h"
+#include "abi/winapi.h"
 
 // =========================================================================
 // PE64 Structures (1-byte packing)
