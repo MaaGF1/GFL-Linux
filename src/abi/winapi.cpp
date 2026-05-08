@@ -15,11 +15,13 @@ typedef uint32_t DWORD;
 typedef uint64_t QWORD;
 
 /**
- * =========================================================================
+ * ==================================================================================================================================================
+ * ==================================================================================================================================================
  * 
  * @section I: Utility
  * 
- * =========================================================================
+ * ==================================================================================================================================================
+ * ==================================================================================================================================================
  */
 
 /**
@@ -40,7 +42,8 @@ static void WcharToAscii(const uint16_t* wstr, char* out_buf, size_t max_len)
 /**
  * @subsection 1.2 Virtual Module Tracker
  */
-typedef struct {
+typedef struct
+{
 	char name[128];
 	void* handle;
 } VIRTUAL_MODULE;
@@ -75,7 +78,8 @@ static void* GetOrRegisterVirtualModule(const char* name)
 }
 
 /**
- * =========================================================================
+ * ==================================================================================================================================================
+ * ==================================================================================================================================================
  * 
  * @section II: C++ Implementations 
  * 
@@ -134,7 +138,8 @@ static void* GetOrRegisterVirtualModule(const char* name)
  *	  6.4 RSP: Stack pointer, must be 16-byte aligned when entering/exiting functions
  *	  6.5 RBP: Base
  * 
- * =========================================================================
+ * ==================================================================================================================================================
+ * ==================================================================================================================================================
  */
 
 // Windows API: void GetSystemTimeAsFileTime(LPFILETIME lpSystemTimeAsFileTime)
@@ -283,12 +288,42 @@ extern "C" void Impl_DeleteCriticalSection(void* lpCriticalSection)
 	printf("	[API] DeleteCriticalSection (%p)\n", lpCriticalSection);
 }
 
+// Windows API: BOOL FreeLibrary(HMODULE hLibModule)
+extern "C" DWORD Impl_FreeLibrary(void* hLibModule)
+{
+	printf("	[API] Called FreeLibrary (Handle: %p)\n", hLibModule);
+
+	// Search for the module in our virtual module tracker
+	for (int i = 0; i < g_virtual_module_count; i++)
+	{
+		if (g_virtual_modules[i].handle == hLibModule)
+		{
+			printf("		-> Unloading virtual module: %s\n", g_virtual_modules[i].name);
+
+			// Remove by shifting remaining entries down
+			for (int j = i; j < g_virtual_module_count - 1; j++)
+			{
+				g_virtual_modules[j] = g_virtual_modules[j + 1];
+			}
+			g_virtual_module_count--;
+
+			return 1; // TRUE
+		}
+	}
+
+	// Not found in our tracker; not necessarily an error
+	printf("		-> Module handle %p not found in virtual module tracker\n", hLibModule);
+	return 1; // Still return TRUE for compatibility
+}
+
 /**
- * =========================================================================
+ * ==================================================================================================================================================
+ * ==================================================================================================================================================
  * 
  * @section III: Assembly Thunks (Win64 ABI -> SysV ABI)
  * 
- * =========================================================================
+ * ==================================================================================================================================================
+ * ==================================================================================================================================================
  */
 
 __asm__(
@@ -383,15 +418,26 @@ __asm__(
 );
 extern "C" void Thunk_Real_DeleteCriticalSection();
 
+__asm__(
+	".global Thunk_Real_FreeLibrary\n"
+	"Thunk_Real_FreeLibrary:\n"
+	"	mov %rcx, %rdi\n"
+	"	jmp Impl_FreeLibrary\n"
+);
+extern "C" void Thunk_Real_FreeLibrary();
+
 /**
- * =========================================================================
+ * ==================================================================================================================================================
+ * ==================================================================================================================================================
  * 
  * @section IV: Hook Table for Loader
  * 
- * =========================================================================
+ * ==================================================================================================================================================
+ * ==================================================================================================================================================
  */
 
-const REAL_API_ENTRY g_real_api_hooks[] = {
+const REAL_API_ENTRY g_real_api_hooks[] =
+{
 	{"GetSystemTimeAsFileTime", (void*)Thunk_Real_GetSystemTimeAsFileTime},
 	{"GetCurrentThreadId", (void*)Thunk_Real_GetCurrentThreadId},
 	{"GetCurrentProcessId", (void*)Thunk_Real_GetCurrentProcessId},
@@ -404,5 +450,6 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"EnterCriticalSection", (void*)Thunk_Real_EnterCriticalSection},
 	{"LeaveCriticalSection", (void*)Thunk_Real_LeaveCriticalSection},
 	{"DeleteCriticalSection", (void*)Thunk_Real_DeleteCriticalSection},
+	{"FreeLibrary", (void*)Thunk_Real_FreeLibrary},
 	{0, 0} // Terminator
 };
