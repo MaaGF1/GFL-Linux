@@ -15,7 +15,9 @@
 static thread_local DWORD g_last_error = 0;
 
 /**
+ * ====================================================================================================
  * @section I: Utility
+ * ====================================================================================================
  */
 
 /**
@@ -72,6 +74,7 @@ static void* GetOrRegisterVirtualModule(const char* name)
 }
 
 /**
+ * ====================================================================================================
  * 
  * @section II: C++ Implementations 
  * 
@@ -129,7 +132,7 @@ static void* GetOrRegisterVirtualModule(const char* name)
  *	  6.3 R11: Save RFLAGS during system call
  *	  6.4 RSP: Stack pointer, must be 16-byte aligned when entering/exiting functions
  *	  6.5 RBP: Base
- * 
+ * ====================================================================================================
  */
 
 // Windows API: void GetSystemTimeAsFileTime(LPFILETIME lpSystemTimeAsFileTime)
@@ -544,7 +547,9 @@ WIN_API uint16_t* Impl_GetCommandLineW()
 }
 
 /**
+ * ====================================================================================================
  * @section III: Hook Table for Loader
+ * ====================================================================================================
  */
 
 const REAL_API_ENTRY g_real_api_hooks[] =
