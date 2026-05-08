@@ -14,14 +14,19 @@
 typedef uint32_t DWORD;
 typedef uint64_t QWORD;
 
+#define WIN_API extern "C" __attribute__((ms_abi, force_align_arg_pointer))
+
+// Windows heap flags
+#define HEAP_NO_SERIALIZE			0x00000001
+#define HEAP_GENERATE_EXCEPTIONS	0x00000004
+#define HEAP_ZERO_MEMORY			0x00000008
+#define PROCESS_HEAP_MAGIC			((void*)(uintptr_t)0xDEAD0000)
+
+// Using Linux native thread-local storage to emulate Windows TEB LastError
+static thread_local DWORD g_last_error = 0;
+
 /**
- * ==================================================================================================================================================
- * ==================================================================================================================================================
- * 
  * @section I: Utility
- * 
- * ==================================================================================================================================================
- * ==================================================================================================================================================
  */
 
 /**
@@ -78,8 +83,6 @@ static void* GetOrRegisterVirtualModule(const char* name)
 }
 
 /**
- * ==================================================================================================================================================
- * ==================================================================================================================================================
  * 
  * @section II: C++ Implementations 
  * 
@@ -138,12 +141,10 @@ static void* GetOrRegisterVirtualModule(const char* name)
  *	  6.4 RSP: Stack pointer, must be 16-byte aligned when entering/exiting functions
  *	  6.5 RBP: Base
  * 
- * ==================================================================================================================================================
- * ==================================================================================================================================================
  */
 
 // Windows API: void GetSystemTimeAsFileTime(LPFILETIME lpSystemTimeAsFileTime)
-extern "C" void Impl_GetSystemTimeAsFileTime(DWORD* lpSystemTimeAsFileTime)
+WIN_API void Impl_GetSystemTimeAsFileTime(DWORD* lpSystemTimeAsFileTime)
 {
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
@@ -160,7 +161,7 @@ extern "C" void Impl_GetSystemTimeAsFileTime(DWORD* lpSystemTimeAsFileTime)
 }
 
 // Windows API: DWORD GetCurrentThreadId(void)
-extern "C" DWORD Impl_GetCurrentThreadId()
+WIN_API DWORD Impl_GetCurrentThreadId()
 {
 	pid_t tid = syscall(SYS_gettid);
 	printf("	[API] Called GetCurrentThreadId (TID: %u)\n", (unsigned int)tid);
@@ -168,7 +169,7 @@ extern "C" DWORD Impl_GetCurrentThreadId()
 }
 
 // Windows API: DWORD GetCurrentProcessId(void)
-extern "C" DWORD Impl_GetCurrentProcessId()
+WIN_API DWORD Impl_GetCurrentProcessId()
 {
 	// getpid() is a standard POSIX function provided by unistd.h
 	pid_t pid = getpid();
@@ -177,7 +178,7 @@ extern "C" DWORD Impl_GetCurrentProcessId()
 }
 
 // Windows API: BOOL QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount)
-extern "C" DWORD Impl_QueryPerformanceCounter(QWORD* lpPerformanceCount)
+WIN_API DWORD Impl_QueryPerformanceCounter(QWORD* lpPerformanceCount)
 {
 	struct timespec ts;
 	// Keep monotonically increasing
@@ -195,7 +196,7 @@ extern "C" DWORD Impl_QueryPerformanceCounter(QWORD* lpPerformanceCount)
 }
 
 // Windows API: BOOL QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency)
-extern "C" DWORD Impl_QueryPerformanceFrequency(QWORD* lpFrequency)
+WIN_API DWORD Impl_QueryPerformanceFrequency(QWORD* lpFrequency)
 {
 	// Matches the nanosecond precision in QueryPerformanceCounter
 	*lpFrequency = 1000000000ULL; 
@@ -204,7 +205,7 @@ extern "C" DWORD Impl_QueryPerformanceFrequency(QWORD* lpFrequency)
 }
 
 // Windows API: HMODULE LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags)
-extern "C" void* Impl_LoadLibraryExW(const uint16_t* lpLibFileName, void* hFile, DWORD dwFlags)
+WIN_API void* Impl_LoadLibraryExW(const uint16_t* lpLibFileName, void* hFile, DWORD dwFlags)
 {
 	char lib_name[256];
 	WcharToAscii(lpLibFileName, lib_name, sizeof(lib_name));
@@ -219,7 +220,7 @@ extern "C" void* Impl_LoadLibraryExW(const uint16_t* lpLibFileName, void* hFile,
 }
 
 // Windows API: FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
-extern "C" void* Impl_GetProcAddress(void* hModule, const char* lpProcName)
+WIN_API void* Impl_GetProcAddress(void* hModule, const char* lpProcName)
 {
 	// lpProcName can be either a string pointer or an Ordinal number.
 	// If the top 48 bits are zero, it's an ordinal.
@@ -252,7 +253,7 @@ extern "C" void* Impl_GetProcAddress(void* hModule, const char* lpProcName)
 }
 
 // Windows API: BOOL InitializeCriticalSectionEx(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount, DWORD Flags)
-extern "C" DWORD Impl_InitializeCriticalSectionEx(void* lpCriticalSection, DWORD dwSpinCount, DWORD Flags)
+WIN_API DWORD Impl_InitializeCriticalSectionEx(void* lpCriticalSection, DWORD dwSpinCount, DWORD Flags)
 {
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
@@ -269,27 +270,27 @@ extern "C" DWORD Impl_InitializeCriticalSectionEx(void* lpCriticalSection, DWORD
 }
 
 // Windows API: void EnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
-extern "C" void Impl_EnterCriticalSection(void* lpCriticalSection)
+WIN_API void Impl_EnterCriticalSection(void* lpCriticalSection)
 {
 	pthread_mutex_lock((pthread_mutex_t*)lpCriticalSection);
 	// Note: We don't print here to avoid console spam, as this is called millions of times per second in a game.
 }
 
 // Windows API: void LeaveCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
-extern "C" void Impl_LeaveCriticalSection(void* lpCriticalSection)
+WIN_API void Impl_LeaveCriticalSection(void* lpCriticalSection)
 {
 	pthread_mutex_unlock((pthread_mutex_t*)lpCriticalSection);
 }
 
 // Windows API: void DeleteCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
-extern "C" void Impl_DeleteCriticalSection(void* lpCriticalSection)
+WIN_API void Impl_DeleteCriticalSection(void* lpCriticalSection)
 {
 	pthread_mutex_destroy((pthread_mutex_t*)lpCriticalSection);
 	printf("	[API] DeleteCriticalSection (%p)\n", lpCriticalSection);
 }
 
 // Windows API: BOOL FreeLibrary(HMODULE hLibModule)
-extern "C" DWORD Impl_FreeLibrary(void* hLibModule)
+WIN_API DWORD Impl_FreeLibrary(void* hLibModule)
 {
 	printf("	[API] Called FreeLibrary (Handle: %p)\n", hLibModule);
 
@@ -319,7 +320,7 @@ extern "C" DWORD Impl_FreeLibrary(void* hLibModule)
 #define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
 
 // Windows API: DWORD TlsAlloc(void)
-extern "C" DWORD Impl_TlsAlloc()
+WIN_API DWORD Impl_TlsAlloc()
 {
 	pthread_key_t key;
 	if (pthread_key_create(&key, NULL) == 0)
@@ -331,14 +332,14 @@ extern "C" DWORD Impl_TlsAlloc()
 }
 
 // Windows API: LPVOID TlsGetValue(DWORD dwTlsIndex)
-extern "C" void* Impl_TlsGetValue(DWORD dwTlsIndex)
+WIN_API void* Impl_TlsGetValue(DWORD dwTlsIndex)
 {
 	// Do not print here, as it's called very frequently in tight loops
 	return pthread_getspecific((pthread_key_t)dwTlsIndex);
 }
 
 // Windows API: BOOL TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue)
-extern "C" DWORD Impl_TlsSetValue(DWORD dwTlsIndex, void* lpTlsValue)
+WIN_API DWORD Impl_TlsSetValue(DWORD dwTlsIndex, void* lpTlsValue)
 {
 	// Do not print here either
 	if (pthread_setspecific((pthread_key_t)dwTlsIndex, lpTlsValue) == 0)
@@ -349,7 +350,7 @@ extern "C" DWORD Impl_TlsSetValue(DWORD dwTlsIndex, void* lpTlsValue)
 }
 
 // Windows API: BOOL TlsFree(DWORD dwTlsIndex)
-extern "C" DWORD Impl_TlsFree(DWORD dwTlsIndex)
+WIN_API DWORD Impl_TlsFree(DWORD dwTlsIndex)
 {
 	if (pthread_key_delete((pthread_key_t)dwTlsIndex) == 0)
 	{
@@ -360,230 +361,96 @@ extern "C" DWORD Impl_TlsFree(DWORD dwTlsIndex)
 }
 
 // Windows API: HANDLE GetProcessHeap(void)
-extern "C" void* Impl_GetProcessHeap()
+WIN_API void* Impl_GetProcessHeap()
 {
-	static void* process_heap_handle = (void*)(uintptr_t)0xDEAD0000;
+	static void* process_heap_handle = PROCESS_HEAP_MAGIC;
 	printf("	[API] Called GetProcessHeap -> Handle: %p\n", process_heap_handle);
 	return process_heap_handle;
 }
 
-// Using Linux native thread-local storage to emulate Windows TEB LastError
-static thread_local DWORD g_last_error = 0;
-
 // Windows API: DWORD GetLastError(void)
-extern "C" DWORD Impl_GetLastError()
+WIN_API DWORD Impl_GetLastError()
 {
-    // Do not print here. GetLastError is often called in tight loops
-    // to check status, printing will flood the console and drop FPS to 0.
-    return g_last_error;
+	// Do not print here. GetLastError is often called in tight loops
+	// to check status, printing will flood the console and drop FPS to 0.
+	return g_last_error;
 }
 
 // Windows API: void SetLastError(DWORD dwErrCode)
-extern "C" void Impl_SetLastError(DWORD dwErrCode)
+WIN_API void Impl_SetLastError(DWORD dwErrCode)
 {
-    g_last_error = dwErrCode;
-    
+	g_last_error = dwErrCode;
+	
 	/**
 	 * @note Debug print
 	 */
-    printf("    [API] SetLastError: %u\n", dwErrCode);
+	printf("	[API] SetLastError: %u\n", dwErrCode);
+}
+
+// Windows API: LPVOID HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes)
+WIN_API void* Impl_HeapAlloc(void* hHeap, DWORD dwFlags, size_t dwBytes)
+{
+	void* ptr = NULL;
+
+	if (hHeap == PROCESS_HEAP_MAGIC)
+	{
+		if (dwFlags & HEAP_ZERO_MEMORY)
+		{
+			ptr = calloc(1, dwBytes);
+		}
+		else
+		{
+			ptr = malloc(dwBytes);
+		}
+
+		static bool logged_first_heap_alloc = false;
+		if (!logged_first_heap_alloc)
+		{
+			printf("	[API] HeapAlloc (ProcessHeap, Size: %zu) -> %p\n", dwBytes, ptr);
+			logged_first_heap_alloc = true;
+		}
+	}
+	return ptr;
+}
+
+// Windows API: BOOL HeapFree(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem)
+WIN_API DWORD Impl_HeapFree(void* hHeap, DWORD dwFlags, void* lpMem)
+{
+	if (hHeap == PROCESS_HEAP_MAGIC)
+	{
+		free(lpMem);
+		// Do not print here, it is called too frequently
+		return 1; // TRUE
+	}
+	return 0; // FALSE
 }
 
 /**
- * ==================================================================================================================================================
- * ==================================================================================================================================================
- * 
- * @section III: Assembly Thunks (Win64 ABI -> SysV ABI)
- * 
- * ==================================================================================================================================================
- * ==================================================================================================================================================
- */
-
-__asm__(
-	".text\n"
-	".global Thunk_Real_GetSystemTimeAsFileTime\n"
-	"Thunk_Real_GetSystemTimeAsFileTime:\n"
-	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
-	"	jmp Impl_GetSystemTimeAsFileTime\n"
-);
-extern "C" void Thunk_Real_GetSystemTimeAsFileTime();
-
-__asm__(
-	".global Thunk_Real_GetCurrentThreadId\n"
-	"Thunk_Real_GetCurrentThreadId:\n"
-	"	jmp Impl_GetCurrentThreadId\n"		// No params
-);
-extern "C" void Thunk_Real_GetCurrentThreadId();
-
-__asm__(
-	".global Thunk_Real_GetCurrentProcessId\n"
-	"Thunk_Real_GetCurrentProcessId:\n"
-	"	jmp Impl_GetCurrentProcessId\n"		// No params
-);
-extern "C" void Thunk_Real_GetCurrentProcessId();
-
-__asm__(
-	".global Thunk_Real_QueryPerformanceCounter\n"
-	"Thunk_Real_QueryPerformanceCounter:\n"
-	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
-	"	jmp Impl_QueryPerformanceCounter\n"
-);
-extern "C" void Thunk_Real_QueryPerformanceCounter();
-
-__asm__(
-	".global Thunk_Real_QueryPerformanceFrequency\n"
-	"Thunk_Real_QueryPerformanceFrequency:\n"
-	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
-	"	jmp Impl_QueryPerformanceFrequency\n"
-);
-extern "C" void Thunk_Real_QueryPerformanceFrequency();
-
-__asm__(
-	".global Thunk_Real_LoadLibraryExW\n"
-	"Thunk_Real_LoadLibraryExW:\n"
-	"	mov %rcx, %rdi\n"		// Arg 1: lpLibFileName
-	"	mov %rdx, %rsi\n"		// Arg 2: hFile
-	"	mov %r8,  %rdx\n"		// Arg 3: dwFlags
-	"	jmp Impl_LoadLibraryExW\n"
-);
-extern "C" void Thunk_Real_LoadLibraryExW();
-
-__asm__(
-	".global Thunk_Real_GetProcAddress\n"
-	"Thunk_Real_GetProcAddress:\n"
-	"	mov %rcx, %rdi\n"		// Arg 1: hModule
-	"	mov %rdx, %rsi\n"		// Arg 2: lpProcName
-	"	jmp Impl_GetProcAddress\n"
-);
-extern "C" void Thunk_Real_GetProcAddress();
-
-__asm__(
-	".global Thunk_Real_InitializeCriticalSectionEx\n"
-	"Thunk_Real_InitializeCriticalSectionEx:\n"
-	"	mov %rcx, %rdi\n"		 // Arg 1: lpCriticalSection
-	"	mov %rdx, %rsi\n"		 // Arg 2: dwSpinCount
-	"	mov %r8,  %rdx\n"		 // Arg 3: Flags
-	"	jmp Impl_InitializeCriticalSectionEx\n"
-);
-extern "C" void Thunk_Real_InitializeCriticalSectionEx();
-
-__asm__(
-	".global Thunk_Real_EnterCriticalSection\n"
-	"Thunk_Real_EnterCriticalSection:\n"
-	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
-	"	jmp Impl_EnterCriticalSection\n"
-);
-extern "C" void Thunk_Real_EnterCriticalSection();
-
-__asm__(
-	".global Thunk_Real_LeaveCriticalSection\n"
-	"Thunk_Real_LeaveCriticalSection:\n"
-	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
-	"	jmp Impl_LeaveCriticalSection\n"
-);
-extern "C" void Thunk_Real_LeaveCriticalSection();
-
-__asm__(
-	".global Thunk_Real_DeleteCriticalSection\n"
-	"Thunk_Real_DeleteCriticalSection:\n"
-	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
-	"	jmp Impl_DeleteCriticalSection\n"
-);
-extern "C" void Thunk_Real_DeleteCriticalSection();
-
-__asm__(
-	".global Thunk_Real_FreeLibrary\n"
-	"Thunk_Real_FreeLibrary:\n"
-	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
-	"	jmp Impl_FreeLibrary\n"
-);
-extern "C" void Thunk_Real_FreeLibrary();
-
-__asm__(
-	".global Thunk_Real_TlsAlloc\n"
-	"Thunk_Real_TlsAlloc:\n"
-	"	jmp Impl_TlsAlloc\n"	  // No params
-);
-extern "C" void Thunk_Real_TlsAlloc();
-
-__asm__(
-	".global Thunk_Real_TlsGetValue\n"
-	"Thunk_Real_TlsGetValue:\n"
-	"	mov %rcx, %rdi\n"		 // Arg 1 (Index)
-	"	jmp Impl_TlsGetValue\n"
-);
-extern "C" void Thunk_Real_TlsGetValue();
-
-__asm__(
-	".global Thunk_Real_TlsSetValue\n"
-	"Thunk_Real_TlsSetValue:\n"
-	"	mov %rcx, %rdi\n"		 // Arg 1 (Index)
-	"	mov %rdx, %rsi\n"		 // Arg 2 (Value Pointer)
-	"	jmp Impl_TlsSetValue\n"
-);
-extern "C" void Thunk_Real_TlsSetValue();
-
-__asm__(
-	".global Thunk_Real_TlsFree\n"
-	"Thunk_Real_TlsFree:\n"
-	"	mov %rcx, %rdi\n"		 // Arg 1 (Index)
-	"	jmp Impl_TlsFree\n"
-);
-extern "C" void Thunk_Real_TlsFree();
-
-__asm__(
-	".global Thunk_Real_GetProcessHeap\n"
-	"Thunk_Real_GetProcessHeap:\n"
-	"	jmp Impl_GetProcessHeap\n"	 // No params
-);
-extern "C" void Thunk_Real_GetProcessHeap();
-
-__asm__(
-    ".global Thunk_Real_GetLastError\n"
-    "Thunk_Real_GetLastError:\n"
-    "    jmp Impl_GetLastError\n"	// No params
-);
-extern "C" void Thunk_Real_GetLastError();
-
-__asm__(
-    ".global Thunk_Real_SetLastError\n"
-    "Thunk_Real_SetLastError:\n"
-    "    mov %rcx, %rdi\n"         // Arg 1: dwErrCode
-    "    jmp Impl_SetLastError\n"
-);
-extern "C" void Thunk_Real_SetLastError();
-
-/**
- * ==================================================================================================================================================
- * ==================================================================================================================================================
- * 
  * @section IV: Hook Table for Loader
- * 
- * ==================================================================================================================================================
- * ==================================================================================================================================================
  */
 
 const REAL_API_ENTRY g_real_api_hooks[] =
 {
-	{"GetSystemTimeAsFileTime", (void*)Thunk_Real_GetSystemTimeAsFileTime},
-	{"GetCurrentThreadId", (void*)Thunk_Real_GetCurrentThreadId},
-	{"GetCurrentProcessId", (void*)Thunk_Real_GetCurrentProcessId},
-	{"QueryPerformanceCounter", (void*)Thunk_Real_QueryPerformanceCounter},
-	{"QueryPerformanceFrequency", (void*)Thunk_Real_QueryPerformanceFrequency},
-	{"LoadLibraryExW", (void*)Thunk_Real_LoadLibraryExW},
-	{"LoadLibraryExW", (void*)Thunk_Real_LoadLibraryExW},
-	{"GetProcAddress", (void*)Thunk_Real_GetProcAddress},
-	{"InitializeCriticalSectionEx", (void*)Thunk_Real_InitializeCriticalSectionEx},
-	{"EnterCriticalSection", (void*)Thunk_Real_EnterCriticalSection},
-	{"LeaveCriticalSection", (void*)Thunk_Real_LeaveCriticalSection},
-	{"DeleteCriticalSection", (void*)Thunk_Real_DeleteCriticalSection},
-	{"FreeLibrary", (void*)Thunk_Real_FreeLibrary},
-	{"TlsAlloc", (void*)Thunk_Real_TlsAlloc},
-	{"TlsGetValue", (void*)Thunk_Real_TlsGetValue},
-	{"TlsSetValue", (void*)Thunk_Real_TlsSetValue},
-	{"TlsFree", (void*)Thunk_Real_TlsFree},
-	{"GetProcessHeap", (void*)Thunk_Real_GetProcessHeap},
-	{"GetLastError", (void*)Thunk_Real_GetLastError},
-    {"SetLastError", (void*)Thunk_Real_SetLastError},
+	{"GetSystemTimeAsFileTime", (void*)Impl_GetSystemTimeAsFileTime},
+	{"GetCurrentThreadId", (void*)Impl_GetCurrentThreadId},
+	{"GetCurrentProcessId", (void*)Impl_GetCurrentProcessId},
+	{"QueryPerformanceCounter", (void*)Impl_QueryPerformanceCounter},
+	{"QueryPerformanceFrequency", (void*)Impl_QueryPerformanceFrequency},
+	{"LoadLibraryExW", (void*)Impl_LoadLibraryExW},
+	{"GetProcAddress", (void*)Impl_GetProcAddress},
+	{"InitializeCriticalSectionEx", (void*)Impl_InitializeCriticalSectionEx},
+	{"EnterCriticalSection", (void*)Impl_EnterCriticalSection},
+	{"LeaveCriticalSection", (void*)Impl_LeaveCriticalSection},
+	{"DeleteCriticalSection", (void*)Impl_DeleteCriticalSection},
+	{"FreeLibrary", (void*)Impl_FreeLibrary},
+	{"TlsAlloc", (void*)Impl_TlsAlloc},
+	{"TlsGetValue", (void*)Impl_TlsGetValue},
+	{"TlsSetValue", (void*)Impl_TlsSetValue},
+	{"TlsFree", (void*)Impl_TlsFree},
+	{"GetProcessHeap", (void*)Impl_GetProcessHeap},
+	{"GetLastError", (void*)Impl_GetLastError},
+	{"SetLastError", (void*)Impl_SetLastError},
+	{"HeapAlloc", (void*)Impl_HeapAlloc},
+	{"HeapFree", (void*)Impl_HeapFree},
 	{0, 0} // Terminator
 };
