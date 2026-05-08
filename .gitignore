@@ -1,3 +1,9 @@
 # PoC
 poc/helloworld/loader/build
 poc/helloworld_IAT/loader/build
+
+# Project
+.clang-format.diff
+
+# SRC
+build/
