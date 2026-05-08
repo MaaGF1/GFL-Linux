@@ -209,22 +209,24 @@ void SegvHandler(int sig, siginfo_t *info, void *ucontext)
 // =========================================================================
 // Stubs & Calling Convention
 // =========================================================================
-extern "C" void FatalMissingAPI(const char* func_name)
+// clang-format off
+extern "C" void FatalMissingAPI(const char *func_name)
 {
 	printf("\n[!!! FATAL !!!] UnityPlayer attempted to call unimplemented API: %s\n", func_name);
 	exit(1);
 }
 
-void* FindThunkByName(const char* name)
+void *FindThunkByName(const char *name)
 {
 	for (int i = 0; g_auto_iat_hooks[i].name != 0; i++)
 	{
-		if (strcmp(g_auto_iat_hooks[i].name, name) == 0) return g_auto_iat_hooks[i].thunk_ptr;
+		if (strcmp(g_auto_iat_hooks[i].name, name) == 0)
+			return g_auto_iat_hooks[i].thunk_ptr;
 	}
 	return NULL;
 }
 
-extern "C" void CallWin64_DllMain(void* func_ptr, void* hInst, int reason, void* reserved)
+extern "C" void CallWin64_DllMain(void *func_ptr, void *hInst, int reason, void *reserved)
 {
 	__asm__ volatile (
 		"mov %1, %%rcx \n"
@@ -238,7 +240,7 @@ extern "C" void CallWin64_DllMain(void* func_ptr, void* hInst, int reason, void*
 	);
 }
 
-extern "C" void CallWin64_UnityMain(void* func_ptr, void* hInst, void* hPrev, void* cmdLine, int showCmd)
+extern "C" void CallWin64_UnityMain(void *func_ptr, void *hInst, void *hPrev, void *cmdLine, int showCmd)
 {
 	__asm__ volatile (
 		"mov %1, %%rcx \n"
@@ -255,12 +257,13 @@ extern "C" void CallWin64_UnityMain(void* func_ptr, void* hInst, void* hPrev, vo
 
 void SetupFakeTEB()
 {
-	void* fake_teb = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	void *fake_teb = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	syscall(SYS_arch_prctl, ARCH_SET_GS, fake_teb);
-	QWORD* peb_pointer = (QWORD*)((BYTE *)fake_teb + 0x30);
+	QWORD *peb_pointer = (QWORD*)((BYTE *)fake_teb + 0x30);
 	*peb_pointer = (QWORD)fake_teb;
 }
 
+// clang-format on
 // =========================================================================
 // Main Loader logic
 // =========================================================================
@@ -294,7 +297,7 @@ int main(int argc, char** argv)
 
 	struct stat st;
 	fstat(fd, &st);
-	BYTE * raw_data = (BYTE *)malloc(st.st_size);
+	BYTE *raw_data = (BYTE *)malloc(st.st_size);
 	if (read(fd, raw_data, st.st_size) < 0)
 	{
 		close(fd);
@@ -306,16 +309,16 @@ int main(int argc, char** argv)
 	// ----- 2. Parse PE Headers -----
 
 	// Read raw file
-	IMAGE_DOS_HEADER* dos_header = (IMAGE_DOS_HEADER*)raw_data;
+	IMAGE_DOS_HEADER *dos_header = (IMAGE_DOS_HEADER*)raw_data;
 	// Offset the pointer to NT
-	IMAGE_NT_HEADERS64* nt_headers = (IMAGE_NT_HEADERS64*)(raw_data + dos_header->e_lfanew);
+	IMAGE_NT_HEADERS64 *nt_headers = (IMAGE_NT_HEADERS64*)(raw_data + dos_header->e_lfanew);
 
 	// ----- 3. Allocate executable memory for the mapped image -----
 
 	// To match the CPU's page alignment (typically 4KB), it will be stretched, thus we use `SizeOfImage`
 	DWORD image_size = nt_headers->OptionalHeader.SizeOfImage;
 	// MAP_ANONYMOUS zeroes out all allocated memory. This perfectly handles uninitialized data (.bss).
-	BYTE * mapped_base = (BYTE *)mmap(NULL, image_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	BYTE *mapped_base = (BYTE *)mmap(NULL, image_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
 	g_mapped_base = mapped_base;
 	g_image_size = image_size;
@@ -327,7 +330,7 @@ int main(int argc, char** argv)
 	// Copy NT image to mapped_base
 	memcpy(mapped_base, raw_data, nt_headers->OptionalHeader.SizeOfHeaders);
 	// Safely calculate Section Header starting point
-	IMAGE_SECTION_HEADER* section = (IMAGE_SECTION_HEADER*)((BYTE *)nt_headers + 4 + sizeof(IMAGE_FILE_HEADER) + nt_headers->FileHeader.SizeOfOptionalHeader);
+	IMAGE_SECTION_HEADER *section = (IMAGE_SECTION_HEADER*)((BYTE *)nt_headers + 4 + sizeof(IMAGE_FILE_HEADER) + nt_headers->FileHeader.SizeOfOptionalHeader);
 
 	// Traverse all sections
 	for (int i = 0; i < nt_headers->FileHeader.NumberOfSections; i++)
@@ -346,13 +349,13 @@ int main(int argc, char** argv)
 		if (reloc_rva != 0)
 		{
 			printf("[*] Applying Base Relocations (Delta: 0x%lx)...\n", delta);
-			IMAGE_BASE_RELOCATION* reloc = (IMAGE_BASE_RELOCATION*)(mapped_base + reloc_rva);
+			IMAGE_BASE_RELOCATION *reloc = (IMAGE_BASE_RELOCATION*)(mapped_base + reloc_rva);
 			
 			while (reloc->VirtualAddress != 0)
 			{
 				// Calculate number of entries in this block
 				DWORD count = (reloc->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / 2;
-				WORD* list = (WORD*)(reloc + 1);
+				WORD *list = (WORD*)(reloc + 1);
 				
 				for (DWORD i = 0; i < count; i++)
 				{
@@ -361,7 +364,7 @@ int main(int argc, char** argv)
 					
 					if (type == 10)
 					{ // IMAGE_REL_BASED_DIR64
-						QWORD* patch_addr = (QWORD*)(mapped_base + reloc->VirtualAddress + offset);
+						QWORD *patch_addr = (QWORD*)(mapped_base + reloc->VirtualAddress + offset);
 						*patch_addr += delta;
 					}
 				}
@@ -376,12 +379,12 @@ int main(int argc, char** argv)
 	DWORD import_rva = nt_headers->OptionalHeader.DataDirectory[1].VirtualAddress;
 	if (import_rva != 0)
 	{
-		IMAGE_IMPORT_DESCRIPTOR* import_desc = (IMAGE_IMPORT_DESCRIPTOR*)(mapped_base + import_rva);
+		IMAGE_IMPORT_DESCRIPTOR *import_desc = (IMAGE_IMPORT_DESCRIPTOR*)(mapped_base + import_rva);
 		int hook_count = 0;
 		while (import_desc->Name != 0)
 		{
-			IMAGE_THUNK_DATA64* orig_thunk = (IMAGE_THUNK_DATA64*)(mapped_base + import_desc->DUMMYUNIONNAME.OriginalFirstThunk);
-			IMAGE_THUNK_DATA64* first_thunk = (IMAGE_THUNK_DATA64*)(mapped_base + import_desc->FirstThunk);
+			IMAGE_THUNK_DATA64 *orig_thunk = (IMAGE_THUNK_DATA64*)(mapped_base + import_desc->DUMMYUNIONNAME.OriginalFirstThunk);
+			IMAGE_THUNK_DATA64 *first_thunk = (IMAGE_THUNK_DATA64*)(mapped_base + import_desc->FirstThunk);
 
 			for (int i = 0; orig_thunk[i].u1.AddressOfData != 0; i++)
 			{
@@ -389,13 +392,13 @@ int main(int argc, char** argv)
 				{
 					char ord_buf[32];
 					snprintf(ord_buf, sizeof(ord_buf), "Ordinal_%llu", (unsigned long long)(orig_thunk[i].u1.Ordinal & 0xFFFF));
-					void* thunk = FindThunkByName(ord_buf);
+					void *thunk = FindThunkByName(ord_buf);
 					if(thunk) first_thunk[i].u1.Function = (QWORD)thunk;
 				}
 				else
 				{
-					IMAGE_IMPORT_BY_NAME* ibn = (IMAGE_IMPORT_BY_NAME*)(mapped_base + orig_thunk[i].u1.AddressOfData);
-					void* thunk = FindThunkByName(ibn->Name);
+					IMAGE_IMPORT_BY_NAME *ibn = (IMAGE_IMPORT_BY_NAME*)(mapped_base + orig_thunk[i].u1.AddressOfData);
+					void *thunk = FindThunkByName(ibn->Name);
 					if (thunk)
 					{
 						first_thunk[i].u1.Function = (QWORD)thunk;
@@ -412,7 +415,7 @@ int main(int argc, char** argv)
 	DWORD ep_rva = nt_headers->OptionalHeader.AddressOfEntryPoint;
 	if (ep_rva != 0)
 	{
-		void* dll_main = mapped_base + ep_rva;
+		void *dll_main = mapped_base + ep_rva;
 		printf("[EXEC] Invoking DllMain (DLL_PROCESS_ATTACH)...\n");
 		// Windows API: BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved);
 		// Reason 1 = DLL_PROCESS_ATTACH
@@ -422,17 +425,17 @@ int main(int argc, char** argv)
 
 	// --- Find and Call UnityMain ---
 	DWORD export_rva = nt_headers->OptionalHeader.DataDirectory[0].VirtualAddress;
-	void* func_UnityMain = NULL;
+	void *func_UnityMain = NULL;
 	if (export_rva != 0)
 	{
-		IMAGE_EXPORT_DIRECTORY* export_dir = (IMAGE_EXPORT_DIRECTORY*)(mapped_base + export_rva);
-		DWORD* name_rvas = (DWORD*)(mapped_base + export_dir->AddressOfNames);
-		WORD* ordinal_rvas = (WORD*)(mapped_base + export_dir->AddressOfNameOrdinals);
-		DWORD* function_rvas = (DWORD*)(mapped_base + export_dir->AddressOfFunctions);
+		IMAGE_EXPORT_DIRECTORY *export_dir = (IMAGE_EXPORT_DIRECTORY*)(mapped_base + export_rva);
+		DWORD *name_rvas = (DWORD*)(mapped_base + export_dir->AddressOfNames);
+		WORD *ordinal_rvas = (WORD*)(mapped_base + export_dir->AddressOfNameOrdinals);
+		DWORD *function_rvas = (DWORD*)(mapped_base + export_dir->AddressOfFunctions);
 
 		for (DWORD i = 0; i < export_dir->NumberOfNames; i++)
 		{
-			char* func_name = (char*)(mapped_base + name_rvas[i]);
+			char *func_name = (char*)(mapped_base + name_rvas[i]);
 			if (strcmp(func_name, "UnityMain") == 0)
 			{
 				func_UnityMain = mapped_base + function_rvas[ordinal_rvas[i]];
@@ -444,7 +447,7 @@ int main(int argc, char** argv)
 	if (func_UnityMain)
 	{
 		printf("\n[EXEC] Invoking UnityMain...\n");
-		const wchar_t* cmdline = L"-force-vulkan";
+		const wchar_t *cmdline = L"-force-vulkan";
 		CallWin64_UnityMain(func_UnityMain, mapped_base, NULL, (void*)cmdline, 1);
 		printf("\n[OUT] Execution Returned.\n");
 	}
