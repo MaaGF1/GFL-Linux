@@ -3,7 +3,7 @@ Language: Cpp
 BasedOnStyle: Microsoft
 IndentWidth: 4
 ColumnLimit: 180
-UseTab: Never
+UseTab: ForIndentation
 
 # 大括号设置
 BreakBeforeBraces: Custom
@@ -53,7 +53,7 @@ AllowShortFunctionsOnASingleLine: None
 BinPackParameters: false
 KeepEmptyLinesAtTheStartOfBlocks: false
 MaxEmptyLinesToKeep: 1
-PointerAlignment: Left
+PointerAlignment: Right
 SpaceAfterCStyleCast: false
 SpaceBeforeAssignmentOperators: true
 SpaceBeforeParens: ControlStatements

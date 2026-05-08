@@ -10,7 +10,7 @@
  */
 
 #ifndef _GNU_SOURCE
-	#define _GNU_SOURCE
+#define _GNU_SOURCE
 #endif
 
 #include <stdio.h>
@@ -32,7 +32,7 @@
 // =========================================================================
 // PE64 Structures (1-byte packing)
 // =========================================================================
-typedef uint8_t  BYTE;
+typedef uint8_t BYTE;
 typedef uint16_t WORD;
 typedef uint32_t DWORD;
 typedef uint64_t QWORD;
@@ -170,7 +170,7 @@ typedef struct _IMAGE_BASE_RELOCATION
 #pragma pack(pop)
 
 // Global pointers for crash diagnostics
-BYTE* g_mapped_base = NULL;
+BYTE *g_mapped_base = NULL;
 DWORD g_image_size = 0;
 
 // =========================================================================
@@ -179,13 +179,13 @@ DWORD g_image_size = 0;
 void SegvHandler(int sig, siginfo_t *info, void *ucontext)
 {
 	ucontext_t *uc = (ucontext_t *)ucontext;
-	
+
 	// Extract CPU Instruction Pointer (RIP) and Stack Pointer (RSP)
 	QWORD rip = uc->uc_mcontext.gregs[REG_RIP];
 	QWORD rsp = uc->uc_mcontext.gregs[REG_RSP];
 	QWORD rax = uc->uc_mcontext.gregs[REG_RAX];
 	QWORD rcx = uc->uc_mcontext.gregs[REG_RCX];
-	
+
 	printf("\n==================== FATAL CRASH ====================\n");
 	printf("[!] Caught SIGSEGV (Segmentation Fault)!\n");
 	printf("	Faulting Memory Address : %p\n", info->si_addr);
@@ -257,7 +257,7 @@ void SetupFakeTEB()
 {
 	void* fake_teb = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	syscall(SYS_arch_prctl, ARCH_SET_GS, fake_teb);
-	QWORD* peb_pointer = (QWORD*)((BYTE*)fake_teb + 0x30);
+	QWORD* peb_pointer = (QWORD*)((BYTE *)fake_teb + 0x30);
 	*peb_pointer = (QWORD)fake_teb;
 }
 
@@ -294,7 +294,7 @@ int main(int argc, char** argv)
 
 	struct stat st;
 	fstat(fd, &st);
-	BYTE* raw_data = (BYTE*)malloc(st.st_size);
+	BYTE * raw_data = (BYTE *)malloc(st.st_size);
 	if (read(fd, raw_data, st.st_size) < 0)
 	{
 		close(fd);
@@ -315,7 +315,7 @@ int main(int argc, char** argv)
 	// To match the CPU's page alignment (typically 4KB), it will be stretched, thus we use `SizeOfImage`
 	DWORD image_size = nt_headers->OptionalHeader.SizeOfImage;
 	// MAP_ANONYMOUS zeroes out all allocated memory. This perfectly handles uninitialized data (.bss).
-	BYTE* mapped_base = (BYTE*)mmap(NULL, image_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	BYTE * mapped_base = (BYTE *)mmap(NULL, image_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 
 	g_mapped_base = mapped_base;
 	g_image_size = image_size;
@@ -327,7 +327,7 @@ int main(int argc, char** argv)
 	// Copy NT image to mapped_base
 	memcpy(mapped_base, raw_data, nt_headers->OptionalHeader.SizeOfHeaders);
 	// Safely calculate Section Header starting point
-	IMAGE_SECTION_HEADER* section = (IMAGE_SECTION_HEADER*)((BYTE*)nt_headers + 4 + sizeof(IMAGE_FILE_HEADER) + nt_headers->FileHeader.SizeOfOptionalHeader);
+	IMAGE_SECTION_HEADER* section = (IMAGE_SECTION_HEADER*)((BYTE *)nt_headers + 4 + sizeof(IMAGE_FILE_HEADER) + nt_headers->FileHeader.SizeOfOptionalHeader);
 
 	// Traverse all sections
 	for (int i = 0; i < nt_headers->FileHeader.NumberOfSections; i++)
@@ -366,7 +366,7 @@ int main(int argc, char** argv)
 					}
 				}
 				// Move to next block
-				reloc = (IMAGE_BASE_RELOCATION*)((BYTE*)reloc + reloc->SizeOfBlock);
+				reloc = (IMAGE_BASE_RELOCATION*)((BYTE *)reloc + reloc->SizeOfBlock);
 			}
 			printf("[+] Relocations applied successfully.\n");
 		}
