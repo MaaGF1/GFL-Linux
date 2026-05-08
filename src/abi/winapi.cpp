@@ -157,26 +157,26 @@ extern "C" DWORD Impl_QueryPerformanceCounter(QWORD* lpPerformanceCount)
 // Windows API: BOOL QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency)
 extern "C" DWORD Impl_QueryPerformanceFrequency(QWORD* lpFrequency)
 {
-    // Matches the nanosecond precision in QueryPerformanceCounter
-    *lpFrequency = 1000000000ULL; 
-    printf("    [API] Called QueryPerformanceFrequency (1 GHz)\n");
-    return 1; // TRUE
+	// Matches the nanosecond precision in QueryPerformanceCounter
+	*lpFrequency = 1000000000ULL; 
+	printf("	[API] Called QueryPerformanceFrequency (1 GHz)\n");
+	return 1; // TRUE
 }
 
 // Windows API: HMODULE LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags)
 extern "C" void* Impl_LoadLibraryExW(const uint16_t* lpLibFileName, void* hFile, DWORD dwFlags)
 {
-    char lib_name[256];
-    WcharToAscii(lpLibFileName, lib_name, sizeof(lib_name));
+	char lib_name[256];
+	WcharToAscii(lpLibFileName, lib_name, sizeof(lib_name));
 
-    printf("    [API] Called LoadLibraryExW\n");
-    printf("        -> Requested DLL : %s\n", lib_name);
-    printf("        -> Flags         : 0x%08X\n", dwFlags);
+	printf("	[API] Called LoadLibraryExW\n");
+	printf("		-> Requested DLL : %s\n", lib_name);
+	printf("		-> Flags		 : 0x%08X\n", dwFlags);
 
-    // TODO: For now, we return a FAKE handle so the game doesn't instantly crash.
-    // In Phase 4, we will actually mmap the requested DLL if it's "GameAssembly.dll"
-    void* fake_handle = (void*)0x11223344;
-    return fake_handle;
+	// TODO: For now, we return a FAKE handle so the game doesn't instantly crash.
+	// In Phase 4, we will actually mmap the requested DLL if it's "GameAssembly.dll"
+	void* fake_handle = (void*)0x11223344;
+	return fake_handle;
 }
 
 /**
@@ -211,28 +211,28 @@ __asm__(
 extern "C" void Thunk_Real_GetCurrentProcessId();
 
 __asm__(
-    ".global Thunk_Real_QueryPerformanceCounter\n"
-    "Thunk_Real_QueryPerformanceCounter:\n"
-    "    mov %rcx, %rdi\n" // Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
-    "    jmp Impl_QueryPerformanceCounter\n"
+	".global Thunk_Real_QueryPerformanceCounter\n"
+	"Thunk_Real_QueryPerformanceCounter:\n"
+	"	mov %rcx, %rdi\n" // Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
+	"	jmp Impl_QueryPerformanceCounter\n"
 );
 extern "C" void Thunk_Real_QueryPerformanceCounter();
 
 __asm__(
-    ".global Thunk_Real_QueryPerformanceFrequency\n"
-    "Thunk_Real_QueryPerformanceFrequency:\n"
-    "    mov %rcx, %rdi\n"
-    "    jmp Impl_QueryPerformanceFrequency\n"
+	".global Thunk_Real_QueryPerformanceFrequency\n"
+	"Thunk_Real_QueryPerformanceFrequency:\n"
+	"	mov %rcx, %rdi\n"
+	"	jmp Impl_QueryPerformanceFrequency\n"
 );
 extern "C" void Thunk_Real_QueryPerformanceFrequency();
 
 __asm__(
-    ".global Thunk_Real_LoadLibraryExW\n"
-    "Thunk_Real_LoadLibraryExW:\n"
-    "    mov %rcx, %rdi\n"         // Arg 1: lpLibFileName
-    "    mov %rdx, %rsi\n"         // Arg 2: hFile
-    "    mov %r8,  %rdx\n"         // Arg 3: dwFlags
-    "    jmp Impl_LoadLibraryExW\n"
+	".global Thunk_Real_LoadLibraryExW\n"
+	"Thunk_Real_LoadLibraryExW:\n"
+	"	mov %rcx, %rdi\n"		 // Arg 1: lpLibFileName
+	"	mov %rdx, %rsi\n"		 // Arg 2: hFile
+	"	mov %r8,  %rdx\n"		 // Arg 3: dwFlags
+	"	jmp Impl_LoadLibraryExW\n"
 );
 extern "C" void Thunk_Real_LoadLibraryExW();
 
