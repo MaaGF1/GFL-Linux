@@ -11,17 +11,6 @@
 
 #include "winapi.h"
 
-typedef uint32_t DWORD;
-typedef uint64_t QWORD;
-
-#define WIN_API extern "C" __attribute__((ms_abi, force_align_arg_pointer))
-
-// Windows heap flags
-#define HEAP_NO_SERIALIZE			0x00000001
-#define HEAP_GENERATE_EXCEPTIONS	0x00000004
-#define HEAP_ZERO_MEMORY			0x00000008
-#define PROCESS_HEAP_MAGIC			((void*)(uintptr_t)0xDEAD0000)
-
 // Using Linux native thread-local storage to emulate Windows TEB LastError
 static thread_local DWORD g_last_error = 0;
 
@@ -425,8 +414,137 @@ WIN_API DWORD Impl_HeapFree(void* hHeap, DWORD dwFlags, void* lpMem)
 	return 0; // FALSE
 }
 
+// Windows API: VOID GetStartupInfoW(LPSTARTUPINFOW lpStartupInfo)
+WIN_API void Impl_GetStartupInfoW(STARTUPINFOW* lpStartupInfo)
+{
+	if (lpStartupInfo)
+	{
+		// Zero out the entire structure (Default behavior: no special window/handles)
+		memset(lpStartupInfo, 0, sizeof(STARTUPINFOW));
+		
+		// Windows requires the 'cb' field to be set to the size of the structure.
+		// On 64-bit Windows, this is exactly 104 bytes.
+		lpStartupInfo->cb = sizeof(STARTUPINFOW);
+	}
+	printf("	[API] Called GetStartupInfoW\n");
+}
+
+// Windows API: HANDLE GetStdHandle(DWORD nStdHandle)
+WIN_API void* Impl_GetStdHandle(DWORD nStdHandle)
+{
+	void* result = NULL;
+
+	switch (nStdHandle)
+	{
+		case STD_INPUT_HANDLE:
+			result = (void*)((uintptr_t)STD_HANDLE_BASE + 0);
+			printf("	[API] Called GetStdHandle (STD_INPUT_HANDLE) -> %p\n", result);
+			break;
+		case STD_OUTPUT_HANDLE:
+			result = (void*)((uintptr_t)STD_HANDLE_BASE + 1);
+			printf("	[API] Called GetStdHandle (STD_OUTPUT_HANDLE) -> %p\n", result);
+			break;
+		case STD_ERROR_HANDLE:
+			result = (void*)((uintptr_t)STD_HANDLE_BASE + 2);
+			printf("	[API] Called GetStdHandle (STD_ERROR_HANDLE) -> %p\n", result);
+			break;
+		default:
+			printf("	[!!!] GetStdHandle called with unknown handle type: %u\n", (unsigned int)nStdHandle);
+			g_last_error = 87; // ERROR_INVALID_PARAMETER
+			result = (void*)(uintptr_t)-1; // INVALID_HANDLE_VALUE
+			break;
+	}
+
+	return result;
+}
+
+// Windows API: DWORD GetFileType(HANDLE hFile)
+WIN_API DWORD Impl_GetFileType(void* hFile)
+{
+	uintptr_t handle_val = (uintptr_t)hFile;
+	DWORD result = FILE_TYPE_UNKNOWN;
+
+	// Check if it's one of our standard handles
+	if (handle_val >= (uintptr_t)STD_HANDLE_BASE &&
+		handle_val <= (uintptr_t)STD_HANDLE_BASE + 2)
+	{
+		// Standard I/O handles are character devices (terminal)
+		result = FILE_TYPE_CHAR;
+	}
+
+	printf("	[API] Called GetFileType (Handle: %p) -> Type: %u\n", hFile, result);
+	return result;
+}
+
+// Windows API: LPSTR GetCommandLineA(void)
+WIN_API char* Impl_GetCommandLineA()
+{
+	static char cmdline[4096] = {0};
+	static bool initialized = false;
+
+	if (!initialized)
+	{
+		initialized = true;
+
+		// Read command line from /proc/self/cmdline
+		int fd = open("/proc/self/cmdline", O_RDONLY);
+		if (fd >= 0)
+		{
+			ssize_t bytes = read(fd, cmdline, sizeof(cmdline) - 1);
+			close(fd);
+
+			if (bytes > 0)
+			{
+				cmdline[bytes] = '\0';
+
+				// Replace null separators with spaces (except the last one)
+				for (ssize_t i = 0; i < bytes - 1; i++)
+				{
+					if (cmdline[i] == '\0')
+					{
+						cmdline[i] = ' ';
+					}
+				}
+			}
+			else
+			{
+				// Fallback: just use program name
+				strncpy(cmdline, "UnityPlayer", sizeof(cmdline) - 1);
+			}
+		}
+		else
+		{
+			// Fallback: just use program name
+			strncpy(cmdline, "UnityPlayer", sizeof(cmdline) - 1);
+		}
+	}
+
+	printf("	[API] Called GetCommandLineA -> \"%s\"\n", cmdline);
+	return cmdline;
+}
+
+WIN_API uint16_t* Impl_GetCommandLineW()
+{
+    static uint16_t wcmdline[4096] = {0};
+    static bool initialized = false;
+
+    if (!initialized)
+    {
+        initialized = true;
+        char* cl_a = Impl_GetCommandLineA();
+        // Simple ASCII to UTF-16 conversion
+        for (size_t i = 0; cl_a[i] != '\0' && i < 4095; i++)
+        {
+            wcmdline[i] = (uint16_t)(unsigned char)cl_a[i];
+        }
+    }
+
+    printf("    [API] Called GetCommandLineW\n");
+    return wcmdline;
+}
+
 /**
- * @section IV: Hook Table for Loader
+ * @section III: Hook Table for Loader
  */
 
 const REAL_API_ENTRY g_real_api_hooks[] =
@@ -452,5 +570,10 @@ const REAL_API_ENTRY g_real_api_hooks[] =
 	{"SetLastError", (void*)Impl_SetLastError},
 	{"HeapAlloc", (void*)Impl_HeapAlloc},
 	{"HeapFree", (void*)Impl_HeapFree},
+	{"GetStartupInfoW", (void*)Impl_GetStartupInfoW},
+	{"GetStdHandle", (void*)Impl_GetStdHandle},
+	{"GetFileType", (void*)Impl_GetFileType},
+	{"GetCommandLineA", (void*)Impl_GetCommandLineA},
+	{"GetCommandLineW", (void*)Impl_GetCommandLineW},
 	{0, 0} // Terminator
 };
