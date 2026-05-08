@@ -246,6 +246,43 @@ extern "C" void* Impl_GetProcAddress(void* hModule, const char* lpProcName)
 	return func;
 }
 
+// Windows API: BOOL InitializeCriticalSectionEx(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount, DWORD Flags)
+extern "C" DWORD Impl_InitializeCriticalSectionEx(void* lpCriticalSection, DWORD dwSpinCount, DWORD Flags)
+{
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	
+	// CRITICAL REQUIREMENT: Windows critical sections are recursive by default.
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+	
+	// We cast the 40-byte Windows struct directly to a 40-byte Linux pthread_mutex_t
+	pthread_mutex_init((pthread_mutex_t*)lpCriticalSection, &attr);
+	pthread_mutexattr_destroy(&attr);
+
+	printf("	[API] InitializeCriticalSectionEx (%p)\n", lpCriticalSection);
+	return 1; // TRUE
+}
+
+// Windows API: void EnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
+extern "C" void Impl_EnterCriticalSection(void* lpCriticalSection)
+{
+	pthread_mutex_lock((pthread_mutex_t*)lpCriticalSection);
+	// Note: We don't print here to avoid console spam, as this is called millions of times per second in a game.
+}
+
+// Windows API: void LeaveCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
+extern "C" void Impl_LeaveCriticalSection(void* lpCriticalSection)
+{
+	pthread_mutex_unlock((pthread_mutex_t*)lpCriticalSection);
+}
+
+// Windows API: void DeleteCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
+extern "C" void Impl_DeleteCriticalSection(void* lpCriticalSection)
+{
+	pthread_mutex_destroy((pthread_mutex_t*)lpCriticalSection);
+	printf("	[API] DeleteCriticalSection (%p)\n", lpCriticalSection);
+}
+
 /**
  * =========================================================================
  * 
@@ -312,6 +349,40 @@ __asm__(
 );
 extern "C" void Thunk_Real_GetProcAddress();
 
+__asm__(
+	".global Thunk_Real_InitializeCriticalSectionEx\n"
+	"Thunk_Real_InitializeCriticalSectionEx:\n"
+	"	mov %rcx, %rdi\n"		 // Arg 1: lpCriticalSection
+	"	mov %rdx, %rsi\n"		 // Arg 2: dwSpinCount
+	"	mov %r8,  %rdx\n"		 // Arg 3: Flags
+	"	jmp Impl_InitializeCriticalSectionEx\n"
+);
+extern "C" void Thunk_Real_InitializeCriticalSectionEx();
+
+__asm__(
+	".global Thunk_Real_EnterCriticalSection\n"
+	"Thunk_Real_EnterCriticalSection:\n"
+	"	mov %rcx, %rdi\n"
+	"	jmp Impl_EnterCriticalSection\n"
+);
+extern "C" void Thunk_Real_EnterCriticalSection();
+
+__asm__(
+	".global Thunk_Real_LeaveCriticalSection\n"
+	"Thunk_Real_LeaveCriticalSection:\n"
+	"	mov %rcx, %rdi\n"
+	"	jmp Impl_LeaveCriticalSection\n"
+);
+extern "C" void Thunk_Real_LeaveCriticalSection();
+
+__asm__(
+	".global Thunk_Real_DeleteCriticalSection\n"
+	"Thunk_Real_DeleteCriticalSection:\n"
+	"	mov %rcx, %rdi\n"
+	"	jmp Impl_DeleteCriticalSection\n"
+);
+extern "C" void Thunk_Real_DeleteCriticalSection();
+
 /**
  * =========================================================================
  * 
@@ -329,5 +400,9 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"LoadLibraryExW", (void*)Thunk_Real_LoadLibraryExW},
 	{"LoadLibraryExW", (void*)Thunk_Real_LoadLibraryExW},
 	{"GetProcAddress", (void*)Thunk_Real_GetProcAddress},
+	{"InitializeCriticalSectionEx", (void*)Thunk_Real_InitializeCriticalSectionEx},
+	{"EnterCriticalSection", (void*)Thunk_Real_EnterCriticalSection},
+	{"LeaveCriticalSection", (void*)Thunk_Real_LeaveCriticalSection},
+	{"DeleteCriticalSection", (void*)Thunk_Real_DeleteCriticalSection},
 	{0, 0} // Terminator
 };
