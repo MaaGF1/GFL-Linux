@@ -341,7 +341,8 @@ int main(int argc, char **argv)
 		}
 	}
 
-	// --- Process Base Relocations (Crucial for DLLs) ---
+	// ----- 5. Process Base Relocations (for UnityPlayer.dll might be 0x180000000) -----
+
 	QWORD delta = (QWORD)mapped_base - nt_headers->OptionalHeader.ImageBase;
 	if (delta != 0)
 	{
@@ -377,7 +378,8 @@ int main(int argc, char **argv)
 		}
 	}
 
-	// --- IAT Patching ---
+	// ----- 6. IAT Patching -----
+
 	DWORD import_rva = nt_headers->OptionalHeader.DataDirectory[1].VirtualAddress;
 	if (import_rva != 0)
 	{
@@ -414,7 +416,8 @@ int main(int argc, char **argv)
 		printf("[+] Hooked %d API calls.\n", hook_count);
 	}
 
-	// --- Initialize DLL (DllMain) ---
+	// ----- 7. Initialize DLL (DllMain before UnityMain) -----
+
 	DWORD ep_rva = nt_headers->OptionalHeader.AddressOfEntryPoint;
 	if (ep_rva != 0)
 	{
@@ -426,7 +429,8 @@ int main(int argc, char **argv)
 		printf("[OUT] DllMain Initialized Successfully.\n");
 	}
 
-	// --- Find and Call UnityMain ---
+	// ----- 8. Find and Call UnityMain -----
+
 	DWORD export_rva = nt_headers->OptionalHeader.DataDirectory[0].VirtualAddress;
 	void *func_UnityMain = NULL;
 	if (export_rva != 0)
