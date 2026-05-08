@@ -316,6 +316,49 @@ extern "C" DWORD Impl_FreeLibrary(void* hLibModule)
 	return 1; // Still return TRUE for compatibility
 }
 
+#define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
+
+// Windows API: DWORD TlsAlloc(void)
+extern "C" DWORD Impl_TlsAlloc()
+{
+	pthread_key_t key;
+	if (pthread_key_create(&key, NULL) == 0)
+	{
+		printf("	[API] TlsAlloc -> Index: %u\n", (DWORD)key);
+		return (DWORD)key;
+	}
+	return TLS_OUT_OF_INDEXES;
+}
+
+// Windows API: LPVOID TlsGetValue(DWORD dwTlsIndex)
+extern "C" void* Impl_TlsGetValue(DWORD dwTlsIndex)
+{
+	// Do not print here, as it's called very frequently in tight loops
+	return pthread_getspecific((pthread_key_t)dwTlsIndex);
+}
+
+// Windows API: BOOL TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue)
+extern "C" DWORD Impl_TlsSetValue(DWORD dwTlsIndex, void* lpTlsValue)
+{
+	// Do not print here either
+	if (pthread_setspecific((pthread_key_t)dwTlsIndex, lpTlsValue) == 0)
+	{
+		return 1; // TRUE
+	}
+	return 0; // FALSE
+}
+
+// Windows API: BOOL TlsFree(DWORD dwTlsIndex)
+extern "C" DWORD Impl_TlsFree(DWORD dwTlsIndex)
+{
+	if (pthread_key_delete((pthread_key_t)dwTlsIndex) == 0)
+	{
+		printf("	[API] TlsFree -> Index: %u\n", dwTlsIndex);
+		return 1; // TRUE
+	}
+	return 0; // FALSE
+}
+
 /**
  * ==================================================================================================================================================
  * ==================================================================================================================================================
@@ -426,6 +469,38 @@ __asm__(
 );
 extern "C" void Thunk_Real_FreeLibrary();
 
+__asm__(
+	".global Thunk_Real_TlsAlloc\n"
+	"Thunk_Real_TlsAlloc:\n"
+	"	jmp Impl_TlsAlloc\n"	  // No params
+);
+extern "C" void Thunk_Real_TlsAlloc();
+
+__asm__(
+	".global Thunk_Real_TlsGetValue\n"
+	"Thunk_Real_TlsGetValue:\n"
+	"	mov %rcx, %rdi\n"		 // Arg 1 (Index)
+	"	jmp Impl_TlsGetValue\n"
+);
+extern "C" void Thunk_Real_TlsGetValue();
+
+__asm__(
+	".global Thunk_Real_TlsSetValue\n"
+	"Thunk_Real_TlsSetValue:\n"
+	"	mov %rcx, %rdi\n"		 // Arg 1 (Index)
+	"	mov %rdx, %rsi\n"		 // Arg 2 (Value Pointer)
+	"	jmp Impl_TlsSetValue\n"
+);
+extern "C" void Thunk_Real_TlsSetValue();
+
+__asm__(
+	".global Thunk_Real_TlsFree\n"
+	"Thunk_Real_TlsFree:\n"
+	"	mov %rcx, %rdi\n"		 // Arg 1 (Index)
+	"	jmp Impl_TlsFree\n"
+);
+extern "C" void Thunk_Real_TlsFree();
+
 /**
  * ==================================================================================================================================================
  * ==================================================================================================================================================
@@ -451,5 +526,9 @@ const REAL_API_ENTRY g_real_api_hooks[] =
 	{"LeaveCriticalSection", (void*)Thunk_Real_LeaveCriticalSection},
 	{"DeleteCriticalSection", (void*)Thunk_Real_DeleteCriticalSection},
 	{"FreeLibrary", (void*)Thunk_Real_FreeLibrary},
+	{"TlsAlloc", (void*)Thunk_Real_TlsAlloc},
+	{"TlsGetValue", (void*)Thunk_Real_TlsGetValue},
+	{"TlsSetValue", (void*)Thunk_Real_TlsSetValue},
+	{"TlsFree", (void*)Thunk_Real_TlsFree},
 	{0, 0} // Terminator
 };
