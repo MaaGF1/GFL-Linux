@@ -259,7 +259,7 @@ void SetupFakeTEB()
 {
 	void *fake_teb = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	syscall(SYS_arch_prctl, ARCH_SET_GS, fake_teb);
-	QWORD *peb_pointer = (QWORD*)((BYTE *)fake_teb + 0x30);
+	QWORD *peb_pointer = (QWORD *)((BYTE *)fake_teb + 0x30);
 	*peb_pointer = (QWORD)fake_teb;
 }
 
@@ -267,7 +267,7 @@ void SetupFakeTEB()
 // =========================================================================
 // Main Loader logic
 // =========================================================================
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
 	// Register the Crash Handler
 	struct sigaction sa;
@@ -309,9 +309,9 @@ int main(int argc, char** argv)
 	// ----- 2. Parse PE Headers -----
 
 	// Read raw file
-	IMAGE_DOS_HEADER *dos_header = (IMAGE_DOS_HEADER*)raw_data;
+	IMAGE_DOS_HEADER *dos_header = (IMAGE_DOS_HEADER *)raw_data;
 	// Offset the pointer to NT
-	IMAGE_NT_HEADERS64 *nt_headers = (IMAGE_NT_HEADERS64*)(raw_data + dos_header->e_lfanew);
+	IMAGE_NT_HEADERS64 *nt_headers = (IMAGE_NT_HEADERS64 *)(raw_data + dos_header->e_lfanew);
 
 	// ----- 3. Allocate executable memory for the mapped image -----
 
@@ -322,7 +322,7 @@ int main(int argc, char** argv)
 
 	g_mapped_base = mapped_base;
 	g_image_size = image_size;
-	
+
 	printf("[+] Allocated %u bytes at %p\n", image_size, mapped_base);
 
 	// ----- 4. Map PE Headers -----
@@ -330,7 +330,7 @@ int main(int argc, char** argv)
 	// Copy NT image to mapped_base
 	memcpy(mapped_base, raw_data, nt_headers->OptionalHeader.SizeOfHeaders);
 	// Safely calculate Section Header starting point
-	IMAGE_SECTION_HEADER *section = (IMAGE_SECTION_HEADER*)((BYTE *)nt_headers + 4 + sizeof(IMAGE_FILE_HEADER) + nt_headers->FileHeader.SizeOfOptionalHeader);
+	IMAGE_SECTION_HEADER *section = (IMAGE_SECTION_HEADER *)((BYTE *)nt_headers + 4 + sizeof(IMAGE_FILE_HEADER) + nt_headers->FileHeader.SizeOfOptionalHeader);
 
 	// Traverse all sections
 	for (int i = 0; i < nt_headers->FileHeader.NumberOfSections; i++)
@@ -349,27 +349,29 @@ int main(int argc, char** argv)
 		if (reloc_rva != 0)
 		{
 			printf("[*] Applying Base Relocations (Delta: 0x%lx)...\n", delta);
-			IMAGE_BASE_RELOCATION *reloc = (IMAGE_BASE_RELOCATION*)(mapped_base + reloc_rva);
-			
+			IMAGE_BASE_RELOCATION *reloc = (IMAGE_BASE_RELOCATION *)(mapped_base + reloc_rva);
+
 			while (reloc->VirtualAddress != 0)
 			{
 				// Calculate number of entries in this block
 				DWORD count = (reloc->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / 2;
-				WORD *list = (WORD*)(reloc + 1);
-				
+				WORD *list = (WORD *)(reloc + 1);
+
 				for (DWORD i = 0; i < count; i++)
 				{
-					int type = list[i] >> 12;	  // Top 4 bits are the relocation type
-					int offset = list[i] & 0x0FFF; // Bottom 12 bits are the offset
-					
+					// Top 4 bits are the relocation type
+					int type = list[i] >> 12;
+					// Bottom 12 bits are the offset
+					int offset = list[i] & 0x0FFF;
+
 					if (type == 10)
 					{ // IMAGE_REL_BASED_DIR64
-						QWORD *patch_addr = (QWORD*)(mapped_base + reloc->VirtualAddress + offset);
+						QWORD *patch_addr = (QWORD *)(mapped_base + reloc->VirtualAddress + offset);
 						*patch_addr += delta;
 					}
 				}
 				// Move to next block
-				reloc = (IMAGE_BASE_RELOCATION*)((BYTE *)reloc + reloc->SizeOfBlock);
+				reloc = (IMAGE_BASE_RELOCATION *)((BYTE *)reloc + reloc->SizeOfBlock);
 			}
 			printf("[+] Relocations applied successfully.\n");
 		}
@@ -379,12 +381,12 @@ int main(int argc, char** argv)
 	DWORD import_rva = nt_headers->OptionalHeader.DataDirectory[1].VirtualAddress;
 	if (import_rva != 0)
 	{
-		IMAGE_IMPORT_DESCRIPTOR *import_desc = (IMAGE_IMPORT_DESCRIPTOR*)(mapped_base + import_rva);
+		IMAGE_IMPORT_DESCRIPTOR *import_desc = (IMAGE_IMPORT_DESCRIPTOR *)(mapped_base + import_rva);
 		int hook_count = 0;
 		while (import_desc->Name != 0)
 		{
-			IMAGE_THUNK_DATA64 *orig_thunk = (IMAGE_THUNK_DATA64*)(mapped_base + import_desc->DUMMYUNIONNAME.OriginalFirstThunk);
-			IMAGE_THUNK_DATA64 *first_thunk = (IMAGE_THUNK_DATA64*)(mapped_base + import_desc->FirstThunk);
+			IMAGE_THUNK_DATA64 *orig_thunk = (IMAGE_THUNK_DATA64 *)(mapped_base + import_desc->DUMMYUNIONNAME.OriginalFirstThunk);
+			IMAGE_THUNK_DATA64 *first_thunk = (IMAGE_THUNK_DATA64 *)(mapped_base + import_desc->FirstThunk);
 
 			for (int i = 0; orig_thunk[i].u1.AddressOfData != 0; i++)
 			{
@@ -393,11 +395,12 @@ int main(int argc, char** argv)
 					char ord_buf[32];
 					snprintf(ord_buf, sizeof(ord_buf), "Ordinal_%llu", (unsigned long long)(orig_thunk[i].u1.Ordinal & 0xFFFF));
 					void *thunk = FindThunkByName(ord_buf);
-					if(thunk) first_thunk[i].u1.Function = (QWORD)thunk;
+					if (thunk)
+						first_thunk[i].u1.Function = (QWORD)thunk;
 				}
 				else
 				{
-					IMAGE_IMPORT_BY_NAME *ibn = (IMAGE_IMPORT_BY_NAME*)(mapped_base + orig_thunk[i].u1.AddressOfData);
+					IMAGE_IMPORT_BY_NAME *ibn = (IMAGE_IMPORT_BY_NAME *)(mapped_base + orig_thunk[i].u1.AddressOfData);
 					void *thunk = FindThunkByName(ibn->Name);
 					if (thunk)
 					{
@@ -428,14 +431,14 @@ int main(int argc, char** argv)
 	void *func_UnityMain = NULL;
 	if (export_rva != 0)
 	{
-		IMAGE_EXPORT_DIRECTORY *export_dir = (IMAGE_EXPORT_DIRECTORY*)(mapped_base + export_rva);
-		DWORD *name_rvas = (DWORD*)(mapped_base + export_dir->AddressOfNames);
-		WORD *ordinal_rvas = (WORD*)(mapped_base + export_dir->AddressOfNameOrdinals);
-		DWORD *function_rvas = (DWORD*)(mapped_base + export_dir->AddressOfFunctions);
+		IMAGE_EXPORT_DIRECTORY *export_dir = (IMAGE_EXPORT_DIRECTORY *)(mapped_base + export_rva);
+		DWORD *name_rvas = (DWORD *)(mapped_base + export_dir->AddressOfNames);
+		WORD *ordinal_rvas = (WORD *)(mapped_base + export_dir->AddressOfNameOrdinals);
+		DWORD *function_rvas = (DWORD *)(mapped_base + export_dir->AddressOfFunctions);
 
 		for (DWORD i = 0; i < export_dir->NumberOfNames; i++)
 		{
-			char *func_name = (char*)(mapped_base + name_rvas[i]);
+			char *func_name = (char *)(mapped_base + name_rvas[i]);
 			if (strcmp(func_name, "UnityMain") == 0)
 			{
 				func_UnityMain = mapped_base + function_rvas[ordinal_rvas[i]];
@@ -448,7 +451,7 @@ int main(int argc, char** argv)
 	{
 		printf("\n[EXEC] Invoking UnityMain...\n");
 		const wchar_t *cmdline = L"-force-vulkan";
-		CallWin64_UnityMain(func_UnityMain, mapped_base, NULL, (void*)cmdline, 1);
+		CallWin64_UnityMain(func_UnityMain, mapped_base, NULL, (void *)cmdline, 1);
 		printf("\n[OUT] Execution Returned.\n");
 	}
 	else
