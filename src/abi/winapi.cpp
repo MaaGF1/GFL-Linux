@@ -1,5 +1,5 @@
 /**
- * @file src/main.cpp
+ * @file src/abi/winapi.cpp
  * @author @SwordofMorning
  * @brief Implementations of Windows APIs on Linux
  * @version 0.1
@@ -12,7 +12,9 @@
 #include "winapi.h"
 #include <stdio.h>
 #include <time.h>
+#include <unistd.h>
 #include <sys/time.h>
+#include <sys/syscall.h>
 
 typedef uint32_t DWORD;
 typedef uint64_t QWORD;
@@ -22,7 +24,7 @@ typedef uint64_t QWORD;
  * 
  * @par C++ Implementations 
  * 
- * @note Windows x64 ABI
+ * @section Windows x64 ABI
  * 1. Parameter registers (sequential parameter passing): 
  *      Int/Pointer: RCX, RDX, R8, R9;
  *      Float/Vector: XMM0, XMM1, XMM2, XMM3;
@@ -44,8 +46,15 @@ typedef uint64_t QWORD;
  *      5.3 RIP: Instruction
  *      5.4 RFLAGS: Status Flags
  *      5.5 XMM: Float/Vector
- *      
- * @note System V AMD64 ABI
+ * @attention Shadow Space:
+ *      "sub $32, %%rsp \n"	        // [Win64 ABI] Allocate 32 bytes of shadow space
+ *      "call *%1 \n"               // Call the Windows function pointer
+ *      "add $32, %%rsp \n"	        // Clean up the shadow space
+ * Windows requires that the caller reserve 32 bytes (the space of four 64-bit registers, or 0x20) of shadow space 
+ * on the stack before making a call instruction, regardless of whether the function has parameters. 
+ * Additionally, the RSP must be 16-byte aligned before the call is executed.
+ *
+ * @section System V AMD64 ABI
  * 1. Integer/pointer parameter registers (sequential parameter passing): 
  *      RDI, RSI, RDX, RCX, R8, R9
  *      More than 6, use a stack to pass them.
@@ -58,12 +67,11 @@ typedef uint64_t QWORD;
  *      3.4 XMM1: Helper
  * 4. Volatile registers
  *      4.1 RAX, RCX, RDX, RSI, RDI, R8, R9, R10, R11
- *      4.2 XMM0–XMM11
+ *      4.2 XMM0–XMM15, all
  *      4.3 ST0–ST7 (X87 FPU)
  * 5. Non-volatile registers
  *      5.1 RBX, RBP, R12, R13, R14, R15
  *      5.2 RIP, keep alignment
- *      5.3 XMM12–XMM15
  * 6. Special registers
  *      6.1 RAX: Also used for system call numbers/return values
  *      6.2 R10: Replaces RCX during system calls (because syscalls would break RCX/R11)
@@ -91,6 +99,13 @@ extern "C" void Impl_GetSystemTimeAsFileTime(DWORD* lpSystemTimeAsFileTime)
     printf("    [API] Called GetSystemTimeAsFileTime (Unix TS: %lu)\n", ts.tv_sec);
 }
 
+// Windows API: DWORD GetCurrentThreadId(void)
+extern "C" DWORD Impl_GetCurrentThreadId()
+{
+    pid_t tid = syscall(SYS_gettid);
+    printf("    [API] Called GetCurrentThreadId (TID: %u)\n", (unsigned int)tid);
+    return (DWORD)tid;
+}
 
 // =========================================================================
 // 2. Assembly Thunks (Win64 ABI -> SysV ABI)
@@ -105,6 +120,12 @@ __asm__(
 );
 extern "C" void Thunk_Real_GetSystemTimeAsFileTime();
 
+__asm__(
+    ".global Thunk_Real_GetCurrentThreadId\n"
+    "Thunk_Real_GetCurrentThreadId:\n"
+    "    jmp Impl_GetCurrentThreadId\n" // No params to pass, just call it
+);
+extern "C" void Thunk_Real_GetCurrentThreadId();
 
 // =========================================================================
 // 3. Hook Table for Loader
@@ -112,6 +133,6 @@ extern "C" void Thunk_Real_GetSystemTimeAsFileTime();
 
 const REAL_API_ENTRY g_real_api_hooks[] = {
     {"GetSystemTimeAsFileTime", (void*)Thunk_Real_GetSystemTimeAsFileTime},
-    // Future implemented APIs will be added here...
+    {"GetCurrentThreadId", (void*)Thunk_Real_GetCurrentThreadId},
     {0, 0} // Terminator
 };
