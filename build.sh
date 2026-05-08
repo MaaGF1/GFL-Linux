@@ -122,6 +122,7 @@ function cf()
     # Exclude list
     local exclude=(
         "src/abi/autogen_stubs.h"
+        "src/include/windows.h"
     )
 
     find src \( -name '*.cpp' -o -name '*.h' \) \

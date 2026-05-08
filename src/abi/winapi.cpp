@@ -23,13 +23,13 @@ static thread_local DWORD g_last_error = 0;
 /**
  * @subsection 1.1 UTF-16 to ASCII String conversion
  */
-static void WcharToAscii(const uint16_t* wstr, char* out_buf, size_t max_len)
+static void WcharToAscii(const uint16_t *wstr, char *out_buf, size_t max_len)
 {
 	size_t i = 0;
 	while (wstr[i] != 0 && i < max_len - 1)
 	{
 		// Just cast down to char. Fine for pure ASCII paths like "d3d11.dll"
-		out_buf[i] = (char)(wstr[i] & 0xFF); 
+		out_buf[i] = (char)(wstr[i] & 0xFF);
 		i++;
 	}
 	out_buf[i] = '\0';
@@ -41,14 +41,14 @@ static void WcharToAscii(const uint16_t* wstr, char* out_buf, size_t max_len)
 typedef struct
 {
 	char name[128];
-	void* handle;
+	void *handle;
 } VIRTUAL_MODULE;
 
 #define MAX_VIRTUAL_MODULES 64
 static VIRTUAL_MODULE g_virtual_modules[MAX_VIRTUAL_MODULES];
 static int g_virtual_module_count = 0;
 
-static void* GetOrRegisterVirtualModule(const char* name)
+static void *GetOrRegisterVirtualModule(const char *name)
 {
 	// 1. Check if already loaded
 	for (int i = 0; i < g_virtual_module_count; i++)
@@ -63,7 +63,7 @@ static void* GetOrRegisterVirtualModule(const char* name)
 	if (g_virtual_module_count < MAX_VIRTUAL_MODULES)
 	{
 		// Generate a fake handle address (e.g., 0x1000, 0x1001...)
-		void* fake_handle = (void*)(uintptr_t)(0x1000 + g_virtual_module_count);
+		void *fake_handle = (void *)(uintptr_t)(0x1000 + g_virtual_module_count);
 		strncpy(g_virtual_modules[g_virtual_module_count].name, name, 127);
 		g_virtual_modules[g_virtual_module_count].handle = fake_handle;
 		g_virtual_module_count++;
@@ -136,7 +136,7 @@ static void* GetOrRegisterVirtualModule(const char* name)
  */
 
 // Windows API: void GetSystemTimeAsFileTime(LPFILETIME lpSystemTimeAsFileTime)
-WIN_API void Impl_GetSystemTimeAsFileTime(DWORD* lpSystemTimeAsFileTime)
+WIN_API void Impl_GetSystemTimeAsFileTime(DWORD *lpSystemTimeAsFileTime)
 {
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
@@ -170,7 +170,7 @@ WIN_API DWORD Impl_GetCurrentProcessId()
 }
 
 // Windows API: BOOL QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount)
-WIN_API DWORD Impl_QueryPerformanceCounter(QWORD* lpPerformanceCount)
+WIN_API DWORD Impl_QueryPerformanceCounter(QWORD *lpPerformanceCount)
 {
 	struct timespec ts;
 	// Keep monotonically increasing
@@ -188,21 +188,21 @@ WIN_API DWORD Impl_QueryPerformanceCounter(QWORD* lpPerformanceCount)
 }
 
 // Windows API: BOOL QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency)
-WIN_API DWORD Impl_QueryPerformanceFrequency(QWORD* lpFrequency)
+WIN_API DWORD Impl_QueryPerformanceFrequency(QWORD *lpFrequency)
 {
 	// Matches the nanosecond precision in QueryPerformanceCounter
-	*lpFrequency = 1000000000ULL; 
+	*lpFrequency = 1000000000ULL;
 	printf("	[API] Called QueryPerformanceFrequency (1 GHz)\n");
 	return 1; // TRUE
 }
 
 // Windows API: HMODULE LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags)
-WIN_API void* Impl_LoadLibraryExW(const uint16_t* lpLibFileName, void* hFile, DWORD dwFlags)
+WIN_API void *Impl_LoadLibraryExW(const uint16_t *lpLibFileName, void *hFile, DWORD dwFlags)
 {
 	char lib_name[256];
 	WcharToAscii(lpLibFileName, lib_name, sizeof(lib_name));
 
-	void* hModule = GetOrRegisterVirtualModule(lib_name);
+	void *hModule = GetOrRegisterVirtualModule(lib_name);
 
 	printf("	[API] Called LoadLibraryExW\n");
 	printf("		-> Requested DLL : %s\n", lib_name);
@@ -212,7 +212,7 @@ WIN_API void* Impl_LoadLibraryExW(const uint16_t* lpLibFileName, void* hFile, DW
 }
 
 // Windows API: FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
-WIN_API void* Impl_GetProcAddress(void* hModule, const char* lpProcName)
+WIN_API void *Impl_GetProcAddress(void *hModule, const char *lpProcName)
 {
 	// lpProcName can be either a string pointer or an Ordinal number.
 	// If the top 48 bits are zero, it's an ordinal.
@@ -220,17 +220,19 @@ WIN_API void* Impl_GetProcAddress(void* hModule, const char* lpProcName)
 	{
 		char ord_buf[32];
 		snprintf(ord_buf, sizeof(ord_buf), "Ordinal_%llu", (unsigned long long)(uintptr_t)lpProcName);
-		
-		void* func = FindRealThunkByName(ord_buf);
-		if (!func) func = FindThunkByName(ord_buf);
-		
+
+		void *func = FindRealThunkByName(ord_buf);
+		if (!func)
+			func = FindThunkByName(ord_buf);
+
 		printf("	[API] GetProcAddress (Ordinal: %s) -> %p\n", ord_buf, func);
 		return func;
 	}
 
 	// It's a normal string
-	void* func = FindRealThunkByName(lpProcName);
-	if (!func) func = FindThunkByName(lpProcName);
+	void *func = FindRealThunkByName(lpProcName);
+	if (!func)
+		func = FindThunkByName(lpProcName);
 
 	if (func)
 	{
@@ -245,16 +247,16 @@ WIN_API void* Impl_GetProcAddress(void* hModule, const char* lpProcName)
 }
 
 // Windows API: BOOL InitializeCriticalSectionEx(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount, DWORD Flags)
-WIN_API DWORD Impl_InitializeCriticalSectionEx(void* lpCriticalSection, DWORD dwSpinCount, DWORD Flags)
+WIN_API DWORD Impl_InitializeCriticalSectionEx(void *lpCriticalSection, DWORD dwSpinCount, DWORD Flags)
 {
 	pthread_mutexattr_t attr;
 	pthread_mutexattr_init(&attr);
-	
+
 	// CRITICAL REQUIREMENT: Windows critical sections are recursive by default.
 	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-	
+
 	// We cast the 40-byte Windows struct directly to a 40-byte Linux pthread_mutex_t
-	pthread_mutex_init((pthread_mutex_t*)lpCriticalSection, &attr);
+	pthread_mutex_init((pthread_mutex_t *)lpCriticalSection, &attr);
 	pthread_mutexattr_destroy(&attr);
 
 	printf("	[API] InitializeCriticalSectionEx (%p)\n", lpCriticalSection);
@@ -262,27 +264,27 @@ WIN_API DWORD Impl_InitializeCriticalSectionEx(void* lpCriticalSection, DWORD dw
 }
 
 // Windows API: void EnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
-WIN_API void Impl_EnterCriticalSection(void* lpCriticalSection)
+WIN_API void Impl_EnterCriticalSection(void *lpCriticalSection)
 {
-	pthread_mutex_lock((pthread_mutex_t*)lpCriticalSection);
+	pthread_mutex_lock((pthread_mutex_t *)lpCriticalSection);
 	// Note: We don't print here to avoid console spam, as this is called millions of times per second in a game.
 }
 
 // Windows API: void LeaveCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
-WIN_API void Impl_LeaveCriticalSection(void* lpCriticalSection)
+WIN_API void Impl_LeaveCriticalSection(void *lpCriticalSection)
 {
-	pthread_mutex_unlock((pthread_mutex_t*)lpCriticalSection);
+	pthread_mutex_unlock((pthread_mutex_t *)lpCriticalSection);
 }
 
 // Windows API: void DeleteCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
-WIN_API void Impl_DeleteCriticalSection(void* lpCriticalSection)
+WIN_API void Impl_DeleteCriticalSection(void *lpCriticalSection)
 {
-	pthread_mutex_destroy((pthread_mutex_t*)lpCriticalSection);
+	pthread_mutex_destroy((pthread_mutex_t *)lpCriticalSection);
 	printf("	[API] DeleteCriticalSection (%p)\n", lpCriticalSection);
 }
 
 // Windows API: BOOL FreeLibrary(HMODULE hLibModule)
-WIN_API DWORD Impl_FreeLibrary(void* hLibModule)
+WIN_API DWORD Impl_FreeLibrary(void *hLibModule)
 {
 	printf("	[API] Called FreeLibrary (Handle: %p)\n", hLibModule);
 
@@ -324,14 +326,14 @@ WIN_API DWORD Impl_TlsAlloc()
 }
 
 // Windows API: LPVOID TlsGetValue(DWORD dwTlsIndex)
-WIN_API void* Impl_TlsGetValue(DWORD dwTlsIndex)
+WIN_API void *Impl_TlsGetValue(DWORD dwTlsIndex)
 {
 	// Do not print here, as it's called very frequently in tight loops
 	return pthread_getspecific((pthread_key_t)dwTlsIndex);
 }
 
 // Windows API: BOOL TlsSetValue(DWORD dwTlsIndex, LPVOID lpTlsValue)
-WIN_API DWORD Impl_TlsSetValue(DWORD dwTlsIndex, void* lpTlsValue)
+WIN_API DWORD Impl_TlsSetValue(DWORD dwTlsIndex, void *lpTlsValue)
 {
 	// Do not print here either
 	if (pthread_setspecific((pthread_key_t)dwTlsIndex, lpTlsValue) == 0)
@@ -353,9 +355,9 @@ WIN_API DWORD Impl_TlsFree(DWORD dwTlsIndex)
 }
 
 // Windows API: HANDLE GetProcessHeap(void)
-WIN_API void* Impl_GetProcessHeap()
+WIN_API void *Impl_GetProcessHeap()
 {
-	static void* process_heap_handle = PROCESS_HEAP_MAGIC;
+	static void *process_heap_handle = PROCESS_HEAP_MAGIC;
 	printf("	[API] Called GetProcessHeap -> Handle: %p\n", process_heap_handle);
 	return process_heap_handle;
 }
@@ -372,7 +374,7 @@ WIN_API DWORD Impl_GetLastError()
 WIN_API void Impl_SetLastError(DWORD dwErrCode)
 {
 	g_last_error = dwErrCode;
-	
+
 	/**
 	 * @note Debug print
 	 */
@@ -380,9 +382,9 @@ WIN_API void Impl_SetLastError(DWORD dwErrCode)
 }
 
 // Windows API: LPVOID HeapAlloc(HANDLE hHeap, DWORD dwFlags, SIZE_T dwBytes)
-WIN_API void* Impl_HeapAlloc(void* hHeap, DWORD dwFlags, size_t dwBytes)
+WIN_API void *Impl_HeapAlloc(void *hHeap, DWORD dwFlags, size_t dwBytes)
 {
-	void* ptr = NULL;
+	void *ptr = NULL;
 
 	if (hHeap == PROCESS_HEAP_MAGIC)
 	{
@@ -406,7 +408,7 @@ WIN_API void* Impl_HeapAlloc(void* hHeap, DWORD dwFlags, size_t dwBytes)
 }
 
 // Windows API: BOOL HeapFree(HANDLE hHeap, DWORD dwFlags, LPVOID lpMem)
-WIN_API DWORD Impl_HeapFree(void* hHeap, DWORD dwFlags, void* lpMem)
+WIN_API DWORD Impl_HeapFree(void *hHeap, DWORD dwFlags, void *lpMem)
 {
 	if (hHeap == PROCESS_HEAP_MAGIC)
 	{
@@ -418,13 +420,13 @@ WIN_API DWORD Impl_HeapFree(void* hHeap, DWORD dwFlags, void* lpMem)
 }
 
 // Windows API: VOID GetStartupInfoW(LPSTARTUPINFOW lpStartupInfo)
-WIN_API void Impl_GetStartupInfoW(STARTUPINFOW* lpStartupInfo)
+WIN_API void Impl_GetStartupInfoW(STARTUPINFOW *lpStartupInfo)
 {
 	if (lpStartupInfo)
 	{
 		// Zero out the entire structure (Default behavior: no special window/handles)
 		memset(lpStartupInfo, 0, sizeof(STARTUPINFOW));
-		
+
 		// Windows requires the 'cb' field to be set to the size of the structure.
 		// On 64-bit Windows, this is exactly 104 bytes.
 		lpStartupInfo->cb = sizeof(STARTUPINFOW);
@@ -433,43 +435,44 @@ WIN_API void Impl_GetStartupInfoW(STARTUPINFOW* lpStartupInfo)
 }
 
 // Windows API: HANDLE GetStdHandle(DWORD nStdHandle)
-WIN_API void* Impl_GetStdHandle(DWORD nStdHandle)
+WIN_API void *Impl_GetStdHandle(DWORD nStdHandle)
 {
-	void* result = NULL;
+	void *result = NULL;
 
+	// clang-format off
 	switch (nStdHandle)
 	{
 		case STD_INPUT_HANDLE:
-			result = (void*)((uintptr_t)STD_HANDLE_BASE + 0);
+			result = (void *)((uintptr_t)STD_HANDLE_BASE + 0);
 			printf("	[API] Called GetStdHandle (STD_INPUT_HANDLE) -> %p\n", result);
 			break;
 		case STD_OUTPUT_HANDLE:
-			result = (void*)((uintptr_t)STD_HANDLE_BASE + 1);
+			result = (void *)((uintptr_t)STD_HANDLE_BASE + 1);
 			printf("	[API] Called GetStdHandle (STD_OUTPUT_HANDLE) -> %p\n", result);
 			break;
 		case STD_ERROR_HANDLE:
-			result = (void*)((uintptr_t)STD_HANDLE_BASE + 2);
+			result = (void *)((uintptr_t)STD_HANDLE_BASE + 2);
 			printf("	[API] Called GetStdHandle (STD_ERROR_HANDLE) -> %p\n", result);
 			break;
 		default:
 			printf("	[!!!] GetStdHandle called with unknown handle type: %u\n", (unsigned int)nStdHandle);
 			g_last_error = 87; // ERROR_INVALID_PARAMETER
-			result = (void*)(uintptr_t)-1; // INVALID_HANDLE_VALUE
+			result = (void *)(uintptr_t)-1; // INVALID_HANDLE_VALUE
 			break;
 	}
+	// clang-format on
 
 	return result;
 }
 
 // Windows API: DWORD GetFileType(HANDLE hFile)
-WIN_API DWORD Impl_GetFileType(void* hFile)
+WIN_API DWORD Impl_GetFileType(void *hFile)
 {
 	uintptr_t handle_val = (uintptr_t)hFile;
 	DWORD result = FILE_TYPE_UNKNOWN;
 
 	// Check if it's one of our standard handles
-	if (handle_val >= (uintptr_t)STD_HANDLE_BASE &&
-		handle_val <= (uintptr_t)STD_HANDLE_BASE + 2)
+	if (handle_val >= (uintptr_t)STD_HANDLE_BASE && handle_val <= (uintptr_t)STD_HANDLE_BASE + 2)
 	{
 		// Standard I/O handles are character devices (terminal)
 		result = FILE_TYPE_CHAR;
@@ -480,7 +483,7 @@ WIN_API DWORD Impl_GetFileType(void* hFile)
 }
 
 // Windows API: LPSTR GetCommandLineA(void)
-WIN_API char* Impl_GetCommandLineA()
+WIN_API char *Impl_GetCommandLineA()
 {
 	static char cmdline[4096] = {0};
 	static bool initialized = false;
@@ -526,24 +529,24 @@ WIN_API char* Impl_GetCommandLineA()
 	return cmdline;
 }
 
-WIN_API uint16_t* Impl_GetCommandLineW()
+WIN_API uint16_t *Impl_GetCommandLineW()
 {
-    static uint16_t wcmdline[4096] = {0};
-    static bool initialized = false;
+	static uint16_t wcmdline[4096] = {0};
+	static bool initialized = false;
 
-    if (!initialized)
-    {
-        initialized = true;
-        char* cl_a = Impl_GetCommandLineA();
-        // Simple ASCII to UTF-16 conversion
-        for (size_t i = 0; cl_a[i] != '\0' && i < 4095; i++)
-        {
-            wcmdline[i] = (uint16_t)(unsigned char)cl_a[i];
-        }
-    }
+	if (!initialized)
+	{
+		initialized = true;
+		char *cl_a = Impl_GetCommandLineA();
+		// Simple ASCII to UTF-16 conversion
+		for (size_t i = 0; cl_a[i] != '\0' && i < 4095; i++)
+		{
+			wcmdline[i] = (uint16_t)(unsigned char)cl_a[i];
+		}
+	}
 
-    printf("    [API] Called GetCommandLineW\n");
-    return wcmdline;
+	printf("	[API] Called GetCommandLineW\n");
+	return wcmdline;
 }
 
 /**
@@ -552,33 +555,34 @@ WIN_API uint16_t* Impl_GetCommandLineW()
  * ====================================================================================================
  */
 
-const REAL_API_ENTRY g_real_api_hooks[] =
-{
-	{"GetSystemTimeAsFileTime", (void*)Impl_GetSystemTimeAsFileTime},
-	{"GetCurrentThreadId", (void*)Impl_GetCurrentThreadId},
-	{"GetCurrentProcessId", (void*)Impl_GetCurrentProcessId},
-	{"QueryPerformanceCounter", (void*)Impl_QueryPerformanceCounter},
-	{"QueryPerformanceFrequency", (void*)Impl_QueryPerformanceFrequency},
-	{"LoadLibraryExW", (void*)Impl_LoadLibraryExW},
-	{"GetProcAddress", (void*)Impl_GetProcAddress},
-	{"InitializeCriticalSectionEx", (void*)Impl_InitializeCriticalSectionEx},
-	{"EnterCriticalSection", (void*)Impl_EnterCriticalSection},
-	{"LeaveCriticalSection", (void*)Impl_LeaveCriticalSection},
-	{"DeleteCriticalSection", (void*)Impl_DeleteCriticalSection},
-	{"FreeLibrary", (void*)Impl_FreeLibrary},
-	{"TlsAlloc", (void*)Impl_TlsAlloc},
-	{"TlsGetValue", (void*)Impl_TlsGetValue},
-	{"TlsSetValue", (void*)Impl_TlsSetValue},
-	{"TlsFree", (void*)Impl_TlsFree},
-	{"GetProcessHeap", (void*)Impl_GetProcessHeap},
-	{"GetLastError", (void*)Impl_GetLastError},
-	{"SetLastError", (void*)Impl_SetLastError},
-	{"HeapAlloc", (void*)Impl_HeapAlloc},
-	{"HeapFree", (void*)Impl_HeapFree},
-	{"GetStartupInfoW", (void*)Impl_GetStartupInfoW},
-	{"GetStdHandle", (void*)Impl_GetStdHandle},
-	{"GetFileType", (void*)Impl_GetFileType},
-	{"GetCommandLineA", (void*)Impl_GetCommandLineA},
-	{"GetCommandLineW", (void*)Impl_GetCommandLineW},
+// clang-format off
+const REAL_API_ENTRY g_real_api_hooks[] = {
+	{"GetSystemTimeAsFileTime", (void *)Impl_GetSystemTimeAsFileTime},
+	{"GetCurrentThreadId", (void *)Impl_GetCurrentThreadId},
+	{"GetCurrentProcessId", (void *)Impl_GetCurrentProcessId},
+	{"QueryPerformanceCounter", (void *)Impl_QueryPerformanceCounter},
+	{"QueryPerformanceFrequency", (void *)Impl_QueryPerformanceFrequency},
+	{"LoadLibraryExW", (void *)Impl_LoadLibraryExW},
+	{"GetProcAddress", (void *)Impl_GetProcAddress},
+	{"InitializeCriticalSectionEx", (void *)Impl_InitializeCriticalSectionEx},
+	{"EnterCriticalSection", (void *)Impl_EnterCriticalSection},
+	{"LeaveCriticalSection", (void *)Impl_LeaveCriticalSection},
+	{"DeleteCriticalSection", (void *)Impl_DeleteCriticalSection},
+	{"FreeLibrary", (void *)Impl_FreeLibrary},
+	{"TlsAlloc", (void *)Impl_TlsAlloc},
+	{"TlsGetValue", (void *)Impl_TlsGetValue},
+	{"TlsSetValue", (void *)Impl_TlsSetValue},
+	{"TlsFree", (void *)Impl_TlsFree},
+	{"GetProcessHeap", (void *)Impl_GetProcessHeap},
+	{"GetLastError", (void *)Impl_GetLastError},
+	{"SetLastError", (void *)Impl_SetLastError},
+	{"HeapAlloc", (void *)Impl_HeapAlloc},
+	{"HeapFree", (void *)Impl_HeapFree},
+	{"GetStartupInfoW", (void *)Impl_GetStartupInfoW},
+	{"GetStdHandle", (void *)Impl_GetStdHandle},
+	{"GetFileType", (void *)Impl_GetFileType},
+	{"GetCommandLineA", (void *)Impl_GetCommandLineA},
+	{"GetCommandLineW", (void *)Impl_GetCommandLineW},
 	{0, 0} // Terminator
 };
+// clang-format on

@@ -25,9 +25,10 @@
 #include "../include/type.h"
 #include "../include/windows.h"
 
-typedef struct {
-    const char *name;
-    void *thunk_ptr;
+typedef struct
+{
+	const char *name;
+	void *thunk_ptr;
 } REAL_API_ENTRY;
 
 extern const REAL_API_ENTRY g_real_api_hooks[];
