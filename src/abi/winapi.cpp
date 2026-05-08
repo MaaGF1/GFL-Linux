@@ -1,7 +1,14 @@
 /**
- * @file winapi.cpp
+ * @file src/main.cpp
+ * @author @SwordofMorning
  * @brief Implementations of Windows APIs on Linux
+ * @version 0.1
+ * @date 2026-05-08
+ * 
+ * @copyright Copyright (c) 2026
+ * 
  */
+
 #include "winapi.h"
 #include <stdio.h>
 #include <time.h>
