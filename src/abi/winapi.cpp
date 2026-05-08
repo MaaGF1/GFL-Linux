@@ -22,9 +22,29 @@ typedef uint64_t QWORD;
 /**
  * =========================================================================
  * 
- * @par C++ Implementations 
+ * @section I: Utility
  * 
- * @section Windows x64 ABI
+ * =========================================================================
+ */
+
+static void WcharToAscii(const uint16_t* wstr, char* out_buf, size_t max_len)
+{
+	size_t i = 0;
+	while (wstr[i] != 0 && i < max_len - 1)
+	{
+		// Just cast down to char. Fine for pure ASCII paths like "d3d11.dll"
+		out_buf[i] = (char)(wstr[i] & 0xFF); 
+		i++;
+	}
+	out_buf[i] = '\0';
+}
+
+/**
+ * =========================================================================
+ * 
+ * @section II: C++ Implementations 
+ * 
+ * @note Windows x64 ABI
  * 1. Parameter registers (sequential parameter passing): 
  *	  Int/Pointer: RCX, RDX, R8, R9;
  *	  Float/Vector: XMM0, XMM1, XMM2, XMM3;
@@ -54,7 +74,7 @@ typedef uint64_t QWORD;
  * on the stack before making a call instruction, regardless of whether the function has parameters. 
  * Additionally, the RSP must be 16-byte aligned before the call is executed.
  *
- * @section System V AMD64 ABI
+ * @note System V AMD64 ABI
  * 1. Integer/pointer parameter registers (sequential parameter passing): 
  *	  RDI, RSI, RDX, RCX, R8, R9
  *	  More than 6, use a stack to pass them.
@@ -116,9 +136,56 @@ extern "C" DWORD Impl_GetCurrentProcessId()
 	return (DWORD)pid;
 }
 
-// =========================================================================
-// 2. Assembly Thunks (Win64 ABI -> SysV ABI)
-// =========================================================================
+// Windows API: BOOL QueryPerformanceCounter(LARGE_INTEGER *lpPerformanceCount)
+extern "C" DWORD Impl_QueryPerformanceCounter(QWORD* lpPerformanceCount)
+{
+	struct timespec ts;
+	// Keep monotonically increasing
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+
+	// Convert to nanoseconds as the counter value
+	// Windows QPC frequency is typically 10 MHz (100 ns ticks)
+	// Use nanosecond precision here for simplicity
+	QWORD counter = (QWORD)ts.tv_sec * 1000000000ULL + (QWORD)ts.tv_nsec;
+
+	*lpPerformanceCount = counter;
+
+	printf("	[API] Called QueryPerformanceCounter (Value: %lu)\n", counter);
+	return 1; // TRUE
+}
+
+// Windows API: BOOL QueryPerformanceFrequency(LARGE_INTEGER *lpFrequency)
+extern "C" DWORD Impl_QueryPerformanceFrequency(QWORD* lpFrequency)
+{
+    // Matches the nanosecond precision in QueryPerformanceCounter
+    *lpFrequency = 1000000000ULL; 
+    printf("    [API] Called QueryPerformanceFrequency (1 GHz)\n");
+    return 1; // TRUE
+}
+
+// Windows API: HMODULE LoadLibraryExW(LPCWSTR lpLibFileName, HANDLE hFile, DWORD dwFlags)
+extern "C" void* Impl_LoadLibraryExW(const uint16_t* lpLibFileName, void* hFile, DWORD dwFlags)
+{
+    char lib_name[256];
+    WcharToAscii(lpLibFileName, lib_name, sizeof(lib_name));
+
+    printf("    [API] Called LoadLibraryExW\n");
+    printf("        -> Requested DLL : %s\n", lib_name);
+    printf("        -> Flags         : 0x%08X\n", dwFlags);
+
+    // TODO: For now, we return a FAKE handle so the game doesn't instantly crash.
+    // In Phase 4, we will actually mmap the requested DLL if it's "GameAssembly.dll"
+    void* fake_handle = (void*)0x11223344;
+    return fake_handle;
+}
+
+/**
+ * =========================================================================
+ * 
+ * @section III: Assembly Thunks (Win64 ABI -> SysV ABI)
+ * 
+ * =========================================================================
+ */
 
 __asm__(
 	".text\n"
@@ -137,19 +204,52 @@ __asm__(
 extern "C" void Thunk_Real_GetCurrentThreadId();
 
 __asm__(
-    ".global Thunk_Real_GetCurrentProcessId\n"
-    "Thunk_Real_GetCurrentProcessId:\n"
-    "    jmp Impl_GetCurrentProcessId\n" // No params to pass, just call it
+	".global Thunk_Real_GetCurrentProcessId\n"
+	"Thunk_Real_GetCurrentProcessId:\n"
+	"	jmp Impl_GetCurrentProcessId\n" // No params to pass, just call it
 );
 extern "C" void Thunk_Real_GetCurrentProcessId();
 
-// =========================================================================
-// 3. Hook Table for Loader
-// =========================================================================
+__asm__(
+    ".global Thunk_Real_QueryPerformanceCounter\n"
+    "Thunk_Real_QueryPerformanceCounter:\n"
+    "    mov %rcx, %rdi\n" // Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
+    "    jmp Impl_QueryPerformanceCounter\n"
+);
+extern "C" void Thunk_Real_QueryPerformanceCounter();
+
+__asm__(
+    ".global Thunk_Real_QueryPerformanceFrequency\n"
+    "Thunk_Real_QueryPerformanceFrequency:\n"
+    "    mov %rcx, %rdi\n"
+    "    jmp Impl_QueryPerformanceFrequency\n"
+);
+extern "C" void Thunk_Real_QueryPerformanceFrequency();
+
+__asm__(
+    ".global Thunk_Real_LoadLibraryExW\n"
+    "Thunk_Real_LoadLibraryExW:\n"
+    "    mov %rcx, %rdi\n"         // Arg 1: lpLibFileName
+    "    mov %rdx, %rsi\n"         // Arg 2: hFile
+    "    mov %r8,  %rdx\n"         // Arg 3: dwFlags
+    "    jmp Impl_LoadLibraryExW\n"
+);
+extern "C" void Thunk_Real_LoadLibraryExW();
+
+/**
+ * =========================================================================
+ * 
+ * @section IV: Hook Table for Loader
+ * 
+ * =========================================================================
+ */
 
 const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"GetSystemTimeAsFileTime", (void*)Thunk_Real_GetSystemTimeAsFileTime},
 	{"GetCurrentThreadId", (void*)Thunk_Real_GetCurrentThreadId},
 	{"GetCurrentProcessId", (void*)Thunk_Real_GetCurrentProcessId},
+	{"QueryPerformanceCounter", (void*)Thunk_Real_QueryPerformanceCounter},
+	{"QueryPerformanceFrequency", (void*)Thunk_Real_QueryPerformanceFrequency},
+	{"LoadLibraryExW", (void*)Thunk_Real_LoadLibraryExW},
 	{0, 0} // Terminator
 };
