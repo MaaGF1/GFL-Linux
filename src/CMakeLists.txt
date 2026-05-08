@@ -2,6 +2,7 @@
 SET(SOURCES
     main.cpp
     autogen_stubs.S
+    winapi.cpp
 )
 
 # Define executable

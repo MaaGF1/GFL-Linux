@@ -28,6 +28,7 @@
 #include <sys/syscall.h>
 
 #include "autogen_stubs.h"
+#include "winapi.h"
 
 // =========================================================================
 // PE64 Structures (1-byte packing)
@@ -216,12 +217,23 @@ extern "C" void FatalMissingAPI(const char *func_name)
 	exit(1);
 }
 
+// Find dummy thunk by name
 void *FindThunkByName(const char *name)
 {
 	for (int i = 0; g_auto_iat_hooks[i].name != 0; i++)
 	{
 		if (strcmp(g_auto_iat_hooks[i].name, name) == 0)
 			return g_auto_iat_hooks[i].thunk_ptr;
+	}
+	return NULL;
+}
+
+// Find implemented thunk by name
+void *FindRealThunkByName(const char *name)
+{
+	for (int i = 0; g_real_api_hooks[i].name != 0; i++)
+	{
+		if (strcmp(g_real_api_hooks[i].name, name) == 0) return g_real_api_hooks[i].thunk_ptr;
 	}
 	return NULL;
 }
@@ -392,18 +404,30 @@ int main(int argc, char **argv)
 
 			for (int i = 0; orig_thunk[i].u1.AddressOfData != 0; i++)
 			{
+				// By Ordinal
 				if (orig_thunk[i].u1.Ordinal & 0x8000000000000000ULL)
 				{
 					char ord_buf[32];
 					snprintf(ord_buf, sizeof(ord_buf), "Ordinal_%llu", (unsigned long long)(orig_thunk[i].u1.Ordinal & 0xFFFF));
-					void *thunk = FindThunkByName(ord_buf);
-					if (thunk)
+
+					// Thunk replace, if we implement it, use real
+                    void* thunk = FindRealThunkByName(ord_buf);
+					// Otherwise, use dummy thunk
+                    if (!thunk)
+						thunk = FindThunkByName(ord_buf);
+                    if (thunk)
 						first_thunk[i].u1.Function = (QWORD)thunk;
 				}
+				// By name
 				else
 				{
 					IMAGE_IMPORT_BY_NAME *ibn = (IMAGE_IMPORT_BY_NAME *)(mapped_base + orig_thunk[i].u1.AddressOfData);
-					void *thunk = FindThunkByName(ibn->Name);
+
+					// First check REAL APIs, then fallback to Auto Dummys
+					void *thunk = FindRealThunkByName(ibn->Name);
+					if (!thunk)
+						thunk = FindThunkByName(ibn->Name);
+
 					if (thunk)
 					{
 						first_thunk[i].u1.Function = (QWORD)thunk;
