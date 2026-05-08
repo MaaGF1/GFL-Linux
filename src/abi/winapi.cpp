@@ -10,11 +10,6 @@
  */
 
 #include "winapi.h"
-#include <stdio.h>
-#include <time.h>
-#include <unistd.h>
-#include <sys/time.h>
-#include <sys/syscall.h>
 
 typedef uint32_t DWORD;
 typedef uint64_t QWORD;
@@ -27,6 +22,9 @@ typedef uint64_t QWORD;
  * =========================================================================
  */
 
+/**
+ * @subsection 1.1 UTF-16 to ASCII String conversion
+ */
 static void WcharToAscii(const uint16_t* wstr, char* out_buf, size_t max_len)
 {
 	size_t i = 0;
@@ -37,6 +35,43 @@ static void WcharToAscii(const uint16_t* wstr, char* out_buf, size_t max_len)
 		i++;
 	}
 	out_buf[i] = '\0';
+}
+
+/**
+ * @subsection 1.2 Virtual Module Tracker
+ */
+typedef struct {
+	char name[128];
+	void* handle;
+} VIRTUAL_MODULE;
+
+#define MAX_VIRTUAL_MODULES 64
+static VIRTUAL_MODULE g_virtual_modules[MAX_VIRTUAL_MODULES];
+static int g_virtual_module_count = 0;
+
+static void* GetOrRegisterVirtualModule(const char* name)
+{
+	// 1. Check if already loaded
+	for (int i = 0; i < g_virtual_module_count; i++)
+	{
+		if (strcasecmp(g_virtual_modules[i].name, name) == 0)
+		{
+			return g_virtual_modules[i].handle;
+		}
+	}
+
+	// 2. Register new virtual module
+	if (g_virtual_module_count < MAX_VIRTUAL_MODULES)
+	{
+		// Generate a fake handle address (e.g., 0x1000, 0x1001...)
+		void* fake_handle = (void*)(uintptr_t)(0x1000 + g_virtual_module_count);
+		strncpy(g_virtual_modules[g_virtual_module_count].name, name, 127);
+		g_virtual_modules[g_virtual_module_count].handle = fake_handle;
+		g_virtual_module_count++;
+		return fake_handle;
+	}
+
+	return NULL; // Tracker full
 }
 
 /**
@@ -169,14 +204,46 @@ extern "C" void* Impl_LoadLibraryExW(const uint16_t* lpLibFileName, void* hFile,
 	char lib_name[256];
 	WcharToAscii(lpLibFileName, lib_name, sizeof(lib_name));
 
+	void* hModule = GetOrRegisterVirtualModule(lib_name);
+
 	printf("	[API] Called LoadLibraryExW\n");
 	printf("		-> Requested DLL : %s\n", lib_name);
-	printf("		-> Flags		 : 0x%08X\n", dwFlags);
+	printf("		-> Assigned Handle: %p\n", hModule);
 
-	// TODO: For now, we return a FAKE handle so the game doesn't instantly crash.
-	// In Phase 4, we will actually mmap the requested DLL if it's "GameAssembly.dll"
-	void* fake_handle = (void*)0x11223344;
-	return fake_handle;
+	return hModule;
+}
+
+// Windows API: FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
+extern "C" void* Impl_GetProcAddress(void* hModule, const char* lpProcName)
+{
+	// lpProcName can be either a string pointer or an Ordinal number.
+	// If the top 48 bits are zero, it's an ordinal.
+	if ((uint64_t)lpProcName <= 0xFFFF)
+	{
+		char ord_buf[32];
+		snprintf(ord_buf, sizeof(ord_buf), "Ordinal_%llu", (unsigned long long)(uintptr_t)lpProcName);
+		
+		void* func = FindRealThunkByName(ord_buf);
+		if (!func) func = FindThunkByName(ord_buf);
+		
+		printf("	[API] GetProcAddress (Ordinal: %s) -> %p\n", ord_buf, func);
+		return func;
+	}
+
+	// It's a normal string
+	void* func = FindRealThunkByName(lpProcName);
+	if (!func) func = FindThunkByName(lpProcName);
+
+	if (func)
+	{
+		printf("	[API] GetProcAddress (Name: %s) -> %p\n", lpProcName, func);
+	}
+	else
+	{
+		printf("	[!!!] GetProcAddress FAILED to find: %s\n", lpProcName);
+	}
+
+	return func;
 }
 
 /**
@@ -191,7 +258,7 @@ __asm__(
 	".text\n"
 	".global Thunk_Real_GetSystemTimeAsFileTime\n"
 	"Thunk_Real_GetSystemTimeAsFileTime:\n"
-	"	mov %rcx, %rdi\n" // Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
+	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
 	"	jmp Impl_GetSystemTimeAsFileTime\n"
 );
 extern "C" void Thunk_Real_GetSystemTimeAsFileTime();
@@ -199,21 +266,21 @@ extern "C" void Thunk_Real_GetSystemTimeAsFileTime();
 __asm__(
 	".global Thunk_Real_GetCurrentThreadId\n"
 	"Thunk_Real_GetCurrentThreadId:\n"
-	"	jmp Impl_GetCurrentThreadId\n" // No params to pass, just call it
+	"	jmp Impl_GetCurrentThreadId\n"		// No params to pass, just call it
 );
 extern "C" void Thunk_Real_GetCurrentThreadId();
 
 __asm__(
 	".global Thunk_Real_GetCurrentProcessId\n"
 	"Thunk_Real_GetCurrentProcessId:\n"
-	"	jmp Impl_GetCurrentProcessId\n" // No params to pass, just call it
+	"	jmp Impl_GetCurrentProcessId\n"		// No params to pass, just call it
 );
 extern "C" void Thunk_Real_GetCurrentProcessId();
 
 __asm__(
 	".global Thunk_Real_QueryPerformanceCounter\n"
 	"Thunk_Real_QueryPerformanceCounter:\n"
-	"	mov %rcx, %rdi\n" // Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
+	"	mov %rcx, %rdi\n"		// Win64 Arg 1 (RCX) -> SysV Arg 1 (RDI)
 	"	jmp Impl_QueryPerformanceCounter\n"
 );
 extern "C" void Thunk_Real_QueryPerformanceCounter();
@@ -229,12 +296,21 @@ extern "C" void Thunk_Real_QueryPerformanceFrequency();
 __asm__(
 	".global Thunk_Real_LoadLibraryExW\n"
 	"Thunk_Real_LoadLibraryExW:\n"
-	"	mov %rcx, %rdi\n"		 // Arg 1: lpLibFileName
-	"	mov %rdx, %rsi\n"		 // Arg 2: hFile
-	"	mov %r8,  %rdx\n"		 // Arg 3: dwFlags
+	"	mov %rcx, %rdi\n"		// Arg 1: lpLibFileName
+	"	mov %rdx, %rsi\n"		// Arg 2: hFile
+	"	mov %r8,  %rdx\n"		// Arg 3: dwFlags
 	"	jmp Impl_LoadLibraryExW\n"
 );
 extern "C" void Thunk_Real_LoadLibraryExW();
+
+__asm__(
+	".global Thunk_Real_GetProcAddress\n"
+	"Thunk_Real_GetProcAddress:\n"
+	"	mov %rcx, %rdi\n"		// Arg 1: hModule
+	"	mov %rdx, %rsi\n"		// Arg 2: lpProcName
+	"	jmp Impl_GetProcAddress\n"
+);
+extern "C" void Thunk_Real_GetProcAddress();
 
 /**
  * =========================================================================
@@ -251,5 +327,7 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"QueryPerformanceCounter", (void*)Thunk_Real_QueryPerformanceCounter},
 	{"QueryPerformanceFrequency", (void*)Thunk_Real_QueryPerformanceFrequency},
 	{"LoadLibraryExW", (void*)Thunk_Real_LoadLibraryExW},
+	{"LoadLibraryExW", (void*)Thunk_Real_LoadLibraryExW},
+	{"GetProcAddress", (void*)Thunk_Real_GetProcAddress},
 	{0, 0} // Terminator
 };
