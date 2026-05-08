@@ -359,6 +359,14 @@ extern "C" DWORD Impl_TlsFree(DWORD dwTlsIndex)
 	return 0; // FALSE
 }
 
+// Windows API: HANDLE GetProcessHeap(void)
+extern "C" void* Impl_GetProcessHeap()
+{
+	static void* process_heap_handle = (void*)(uintptr_t)0xDEAD0000;
+	printf("	[API] Called GetProcessHeap -> Handle: %p\n", process_heap_handle);
+	return process_heap_handle;
+}
+
 /**
  * ==================================================================================================================================================
  * ==================================================================================================================================================
@@ -501,6 +509,13 @@ __asm__(
 );
 extern "C" void Thunk_Real_TlsFree();
 
+__asm__(
+	".global Thunk_Real_GetProcessHeap\n"
+	"Thunk_Real_GetProcessHeap:\n"
+	"	jmp Impl_GetProcessHeap\n"	 // No params
+);
+extern "C" void Thunk_Real_GetProcessHeap();
+
 /**
  * ==================================================================================================================================================
  * ==================================================================================================================================================
@@ -530,5 +545,6 @@ const REAL_API_ENTRY g_real_api_hooks[] =
 	{"TlsGetValue", (void*)Thunk_Real_TlsGetValue},
 	{"TlsSetValue", (void*)Thunk_Real_TlsSetValue},
 	{"TlsFree", (void*)Thunk_Real_TlsFree},
+	{"GetProcessHeap", (void*)Thunk_Real_GetProcessHeap},
 	{0, 0} // Terminator
 };
