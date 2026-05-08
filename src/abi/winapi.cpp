@@ -367,6 +367,28 @@ extern "C" void* Impl_GetProcessHeap()
 	return process_heap_handle;
 }
 
+// Using Linux native thread-local storage to emulate Windows TEB LastError
+static thread_local DWORD g_last_error = 0;
+
+// Windows API: DWORD GetLastError(void)
+extern "C" DWORD Impl_GetLastError()
+{
+    // Do not print here. GetLastError is often called in tight loops
+    // to check status, printing will flood the console and drop FPS to 0.
+    return g_last_error;
+}
+
+// Windows API: void SetLastError(DWORD dwErrCode)
+extern "C" void Impl_SetLastError(DWORD dwErrCode)
+{
+    g_last_error = dwErrCode;
+    
+	/**
+	 * @note Debug print
+	 */
+    printf("    [API] SetLastError: %u\n", dwErrCode);
+}
+
 /**
  * ==================================================================================================================================================
  * ==================================================================================================================================================
@@ -516,6 +538,21 @@ __asm__(
 );
 extern "C" void Thunk_Real_GetProcessHeap();
 
+__asm__(
+    ".global Thunk_Real_GetLastError\n"
+    "Thunk_Real_GetLastError:\n"
+    "    jmp Impl_GetLastError\n"	// No params
+);
+extern "C" void Thunk_Real_GetLastError();
+
+__asm__(
+    ".global Thunk_Real_SetLastError\n"
+    "Thunk_Real_SetLastError:\n"
+    "    mov %rcx, %rdi\n"         // Arg 1: dwErrCode
+    "    jmp Impl_SetLastError\n"
+);
+extern "C" void Thunk_Real_SetLastError();
+
 /**
  * ==================================================================================================================================================
  * ==================================================================================================================================================
@@ -546,5 +583,7 @@ const REAL_API_ENTRY g_real_api_hooks[] =
 	{"TlsSetValue", (void*)Thunk_Real_TlsSetValue},
 	{"TlsFree", (void*)Thunk_Real_TlsFree},
 	{"GetProcessHeap", (void*)Thunk_Real_GetProcessHeap},
+	{"GetLastError", (void*)Thunk_Real_GetLastError},
+    {"SetLastError", (void*)Thunk_Real_SetLastError},
 	{0, 0} // Terminator
 };
