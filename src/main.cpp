@@ -38,13 +38,15 @@ typedef uint32_t DWORD;
 typedef uint64_t QWORD;
 
 #pragma pack(push, 1)
-typedef struct _IMAGE_DOS_HEADER {
+typedef struct _IMAGE_DOS_HEADER
+{
 	WORD e_magic;
 	BYTE reserved[58];
 	DWORD e_lfanew;
 } IMAGE_DOS_HEADER;
 
-typedef struct _IMAGE_FILE_HEADER {
+typedef struct _IMAGE_FILE_HEADER
+{
 	WORD Machine;
 	WORD NumberOfSections;
 	DWORD TimeDateStamp;
@@ -54,12 +56,14 @@ typedef struct _IMAGE_FILE_HEADER {
 	WORD Characteristics;
 } IMAGE_FILE_HEADER;
 
-typedef struct _IMAGE_DATA_DIRECTORY {
+typedef struct _IMAGE_DATA_DIRECTORY
+{
 	DWORD VirtualAddress;
 	DWORD Size;
 } IMAGE_DATA_DIRECTORY;
 
-typedef struct _IMAGE_OPTIONAL_HEADER64 {
+typedef struct _IMAGE_OPTIONAL_HEADER64
+{
 	WORD Magic;
 	BYTE MajorLinkerVersion;
 	BYTE MinorLinkerVersion;
@@ -92,13 +96,15 @@ typedef struct _IMAGE_OPTIONAL_HEADER64 {
 	IMAGE_DATA_DIRECTORY DataDirectory[16];
 } IMAGE_OPTIONAL_HEADER64;
 
-typedef struct _IMAGE_NT_HEADERS64 {
+typedef struct _IMAGE_NT_HEADERS64
+{
 	DWORD Signature;
 	IMAGE_FILE_HEADER FileHeader;
 	IMAGE_OPTIONAL_HEADER64 OptionalHeader;
 } IMAGE_NT_HEADERS64;
 
-typedef struct _IMAGE_SECTION_HEADER {
+typedef struct _IMAGE_SECTION_HEADER
+{
 	BYTE Name[8];
 	DWORD VirtualSize;
 	DWORD VirtualAddress;
@@ -111,8 +117,10 @@ typedef struct _IMAGE_SECTION_HEADER {
 	DWORD Characteristics;
 } IMAGE_SECTION_HEADER;
 
-typedef struct _IMAGE_IMPORT_DESCRIPTOR {
-	union {
+typedef struct _IMAGE_IMPORT_DESCRIPTOR
+{
+	union
+	{
 		DWORD Characteristics;
 		DWORD OriginalFirstThunk;
 	} DUMMYUNIONNAME;
@@ -122,8 +130,10 @@ typedef struct _IMAGE_IMPORT_DESCRIPTOR {
 	DWORD FirstThunk;
 } IMAGE_IMPORT_DESCRIPTOR;
 
-typedef struct _IMAGE_THUNK_DATA64 {
-	union {
+typedef struct _IMAGE_THUNK_DATA64
+{
+	union
+	{
 		QWORD ForwarderString;
 		QWORD Function;
 		QWORD Ordinal;
@@ -131,12 +141,14 @@ typedef struct _IMAGE_THUNK_DATA64 {
 	} u1;
 } IMAGE_THUNK_DATA64;
 
-typedef struct _IMAGE_IMPORT_BY_NAME {
+typedef struct _IMAGE_IMPORT_BY_NAME
+{
 	WORD Hint;
 	char Name[1];
 } IMAGE_IMPORT_BY_NAME;
 
-typedef struct _IMAGE_EXPORT_DIRECTORY {
+typedef struct _IMAGE_EXPORT_DIRECTORY
+{
 	DWORD Characteristics;
 	DWORD TimeDateStamp;
 	WORD MajorVersion;
@@ -150,7 +162,8 @@ typedef struct _IMAGE_EXPORT_DIRECTORY {
 	DWORD AddressOfNameOrdinals;
 } IMAGE_EXPORT_DIRECTORY;
 
-typedef struct _IMAGE_BASE_RELOCATION {
+typedef struct _IMAGE_BASE_RELOCATION
+{
 	DWORD VirtualAddress;
 	DWORD SizeOfBlock;
 } IMAGE_BASE_RELOCATION;
@@ -180,10 +193,13 @@ void SegvHandler(int sig, siginfo_t *info, void *ucontext)
 	printf("	Stack Pointer	   (RSP): 0x%lx\n", rsp);
 	printf("	RAX: 0x%lx  |  RCX: 0x%lx\n", rax, rcx);
 
-	if (g_mapped_base != NULL && rip >= (QWORD)g_mapped_base && rip < (QWORD)g_mapped_base + g_image_size) {
+	if (g_mapped_base != NULL && rip >= (QWORD)g_mapped_base && rip < (QWORD)g_mapped_base + g_image_size)
+	{
 		printf("\n[*] Crash occurred INSIDE UnityPlayer.dll !\n");
 		printf("	Offset from DLL Base: 0x%lx\n", rip - (QWORD)g_mapped_base);
-	} else {
+	}
+	else
+	{
 		printf("\n[*] Crash occurred OUTSIDE UnityPlayer.dll (maybe in Linux libs or our Thunks).\n");
 	}
 	printf("=====================================================\n");
@@ -201,7 +217,8 @@ extern "C" void FatalMissingAPI(const char* func_name)
 
 void* FindThunkByName(const char* name)
 {
-	for (int i = 0; g_auto_iat_hooks[i].name != 0; i++) {
+	for (int i = 0; g_auto_iat_hooks[i].name != 0; i++)
+	{
 		if (strcmp(g_auto_iat_hooks[i].name, name) == 0) return g_auto_iat_hooks[i].thunk_ptr;
 	}
 	return NULL;
@@ -258,7 +275,8 @@ int main(int argc, char** argv)
 
 	printf("[*] GFL Linux PE Loader Initializing...\n");
 
-	if (argc < 2) {
+	if (argc < 2)
+	{
 		printf("Usage: %s <path_to_UnityPlayer.dll>\n", argv[0]);
 		return 1;
 	}
@@ -322,22 +340,27 @@ int main(int argc, char** argv)
 
 	// --- Process Base Relocations (Crucial for DLLs) ---
 	QWORD delta = (QWORD)mapped_base - nt_headers->OptionalHeader.ImageBase;
-	if (delta != 0) {
+	if (delta != 0)
+	{
 		DWORD reloc_rva = nt_headers->OptionalHeader.DataDirectory[5].VirtualAddress;
-		if (reloc_rva != 0) {
+		if (reloc_rva != 0)
+		{
 			printf("[*] Applying Base Relocations (Delta: 0x%lx)...\n", delta);
 			IMAGE_BASE_RELOCATION* reloc = (IMAGE_BASE_RELOCATION*)(mapped_base + reloc_rva);
 			
-			while (reloc->VirtualAddress != 0) {
+			while (reloc->VirtualAddress != 0)
+			{
 				// Calculate number of entries in this block
 				DWORD count = (reloc->SizeOfBlock - sizeof(IMAGE_BASE_RELOCATION)) / 2;
 				WORD* list = (WORD*)(reloc + 1);
 				
-				for (DWORD i = 0; i < count; i++) {
+				for (DWORD i = 0; i < count; i++)
+				{
 					int type = list[i] >> 12;	  // Top 4 bits are the relocation type
 					int offset = list[i] & 0x0FFF; // Bottom 12 bits are the offset
 					
-					if (type == 10) { // IMAGE_REL_BASED_DIR64
+					if (type == 10)
+					{ // IMAGE_REL_BASED_DIR64
 						QWORD* patch_addr = (QWORD*)(mapped_base + reloc->VirtualAddress + offset);
 						*patch_addr += delta;
 					}
@@ -351,15 +374,19 @@ int main(int argc, char** argv)
 
 	// --- IAT Patching ---
 	DWORD import_rva = nt_headers->OptionalHeader.DataDirectory[1].VirtualAddress;
-	if (import_rva != 0) {
+	if (import_rva != 0)
+	{
 		IMAGE_IMPORT_DESCRIPTOR* import_desc = (IMAGE_IMPORT_DESCRIPTOR*)(mapped_base + import_rva);
 		int hook_count = 0;
-		while (import_desc->Name != 0) {
+		while (import_desc->Name != 0)
+		{
 			IMAGE_THUNK_DATA64* orig_thunk = (IMAGE_THUNK_DATA64*)(mapped_base + import_desc->DUMMYUNIONNAME.OriginalFirstThunk);
 			IMAGE_THUNK_DATA64* first_thunk = (IMAGE_THUNK_DATA64*)(mapped_base + import_desc->FirstThunk);
 
-			for (int i = 0; orig_thunk[i].u1.AddressOfData != 0; i++) {
-				if (orig_thunk[i].u1.Ordinal & 0x8000000000000000ULL) {
+			for (int i = 0; orig_thunk[i].u1.AddressOfData != 0; i++)
+			{
+				if (orig_thunk[i].u1.Ordinal & 0x8000000000000000ULL)
+				{
 					char ord_buf[32];
 					snprintf(ord_buf, sizeof(ord_buf), "Ordinal_%llu", (unsigned long long)(orig_thunk[i].u1.Ordinal & 0xFFFF));
 					void* thunk = FindThunkByName(ord_buf);
