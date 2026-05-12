@@ -13,6 +13,8 @@
 
 // Using Linux native thread-local storage to emulate Windows TEB LastError
 static thread_local DWORD g_last_error = 0;
+// Access main module base address from main.cpp
+extern BYTE *g_mapped_base;
 
 /**
  * ====================================================================================================
@@ -583,6 +585,43 @@ WIN_API void Impl_InitializeSListHead(PSLIST_HEADER ListHead)
     printf("    [API] InitializeSListHead (%p)\n", ListHead);
 }
 
+// Windows API: HMODULE GetModuleHandleW(LPCWSTR lpModuleName)
+WIN_API void *Impl_GetModuleHandleW(const uint16_t *lpModuleName)
+{
+    // If lpModuleName is NULL, return the base address of the main module
+    if (lpModuleName == NULL)
+    {
+        printf("    [API] GetModuleHandleW (NULL) -> Main Module %p\n", g_mapped_base);
+        return g_mapped_base;
+    }
+
+    // Convert wide string to ASCII for lookup
+    char module_name[256];
+    WcharToAscii(lpModuleName, module_name, sizeof(module_name));
+
+    // Search in virtual module tracker
+    for (int i = 0; i < g_virtual_module_count; i++)
+    {
+        if (strcasecmp(g_virtual_modules[i].name, module_name) == 0)
+        {
+            printf("    [API] GetModuleHandleW (%s) -> %p\n", module_name, g_virtual_modules[i].handle);
+            return g_virtual_modules[i].handle;
+        }
+    }
+
+    // Special case: if the requested name matches the main module (UnityPlayer.dll)
+    if (strcasecmp(module_name, "UnityPlayer.dll") == 0)
+    {
+        printf("    [API] GetModuleHandleW (%s) -> Main Module %p\n", module_name, g_mapped_base);
+        return g_mapped_base;
+    }
+
+    // Not found
+    printf("    [API] GetModuleHandleW (%s) -> NULL (not found)\n", module_name);
+    g_last_error = 126; // ERROR_MOD_NOT_FOUND
+    return NULL;
+}
+
 /**
  * ====================================================================================================
  * @section III: Hook Table for Loader
@@ -621,6 +660,7 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"GetOEMCP", (void*)Impl_GetOEMCP},
 	{"IsValidCodePage", (void*)Impl_IsValidCodePage},
 	{"InitializeSListHead", (void *)Impl_InitializeSListHead},
+	{"GetModuleHandleW", (void *)Impl_GetModuleHandleW},
 	{0, 0} // Terminator
 };
 // clang-format on
