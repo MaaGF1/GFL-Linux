@@ -179,14 +179,17 @@ WIN_API size_t Impl_VirtualQuery(void *lpAddress, MEMORY_BASIC_INFORMATION *lpBu
 
 					if (perms[2] == 'x')
 					{
-						if (prot == PAGE_READWRITE) prot = PAGE_EXECUTE_READWRITE;
-						else if (prot == PAGE_READONLY) prot = PAGE_EXECUTE_READ;
-						else prot = PAGE_EXECUTE;
+						if (prot == PAGE_READWRITE)
+							prot = PAGE_EXECUTE_READWRITE;
+						else if (prot == PAGE_READONLY)
+							prot = PAGE_EXECUTE_READ;
+						else
+							prot = PAGE_EXECUTE;
 					}
 
 					if (prot == 0)
 						prot = PAGE_NOACCESS;
-					
+
 					lpBuffer->Protect = prot;
 					lpBuffer->AllocationProtect = prot;
 					break;

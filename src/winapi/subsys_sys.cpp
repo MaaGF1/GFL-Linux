@@ -1,9 +1,10 @@
 #include "subsys_sys.h"
 #include "winapi_registry.h" // Needed for FindThunkByName inside GetProcAddress
 
-typedef struct {
-    char name[128];
-    void *handle;
+typedef struct
+{
+	char name[128];
+	void *handle;
 } VIRTUAL_MODULE;
 
 #define MAX_VIRTUAL_MODULES 64

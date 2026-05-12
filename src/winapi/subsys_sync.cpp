@@ -20,21 +20,21 @@ WIN_API DWORD Impl_InitializeCriticalSectionEx(void *lpCriticalSection, DWORD dw
 // Windows API: BOOL InitializeCriticalSectionAndSpinCount(LPCRITICAL_SECTION lpCriticalSection, DWORD dwSpinCount)
 WIN_API DWORD Impl_InitializeCriticalSectionAndSpinCount(void *lpCriticalSection, DWORD dwSpinCount)
 {
-    pthread_mutexattr_t attr;
-    pthread_mutexattr_init(&attr);
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
 
-    // CRITICAL REQUIREMENT: Windows critical sections are recursive by default.
-    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+	// CRITICAL REQUIREMENT: Windows critical sections are recursive by default.
+	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
 
-    // We cast the 40-byte Windows struct directly to a 40-byte Linux pthread_mutex_t
-    pthread_mutex_init((pthread_mutex_t *)lpCriticalSection, &attr);
-    pthread_mutexattr_destroy(&attr);
+	// We cast the 40-byte Windows struct directly to a 40-byte Linux pthread_mutex_t
+	pthread_mutex_init((pthread_mutex_t *)lpCriticalSection, &attr);
+	pthread_mutexattr_destroy(&attr);
 
-    // Print the action. (This might be called frequently during init, 
-    // but usually stabilizes during gameplay).
-    printf("    [API] InitializeCriticalSectionAndSpinCount (%p, SpinCount: %u)\n", lpCriticalSection, dwSpinCount);
-    
-    return 1; // TRUE
+	// Print the action. (This might be called frequently during init, 
+	// but usually stabilizes during gameplay).
+	printf("	[API] InitializeCriticalSectionAndSpinCount (%p, SpinCount: %u)\n", lpCriticalSection, dwSpinCount);
+	
+	return 1; // TRUE
 }
 
 // Windows API: void EnterCriticalSection(LPCRITICAL_SECTION lpCriticalSection)
