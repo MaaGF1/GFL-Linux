@@ -208,9 +208,10 @@ WIN_API void *Impl_GetModuleHandleW(const uint16_t *lpModuleName)
 }
 
 // Windows API: DWORD GetModuleFileNameW(HMODULE hModule, LPWSTR lpFilename, DWORD nSize)
-WIN_API DWORD Impl_GetModuleFileNameW(void* hModule, uint16_t* lpFilename, DWORD nSize)
+WIN_API DWORD Impl_GetModuleFileNameW(void *hModule, uint16_t *lpFilename, DWORD nSize)
 {
-	if (lpFilename == NULL || nSize == 0) return 0;
+	if (lpFilename == NULL || nSize == 0)
+		return 0;
 
 	char linux_path[1024];
 	ssize_t len = readlink("/proc/self/exe", linux_path, sizeof(linux_path) - 1);
@@ -294,20 +295,19 @@ WIN_API DWORD Impl_IsProcessorFeaturePresent(DWORD ProcessorFeature)
 
 	switch (ProcessorFeature)
 	{
-		case PF_XMMI_INSTRUCTIONS_AVAILABLE:
-		case PF_XMMI64_INSTRUCTIONS_AVAILABLE:
-		case PF_NX_ENABLED:
-			result = 1;
-			break;
-		default:
-			// We forcefully disable PF_FASTFAIL_AVAILABLE (23) and AVX to prevent 
-			// the CRT from taking aggressive hardware/security paths.
-			result = 0;
-			break;
+	case PF_XMMI_INSTRUCTIONS_AVAILABLE:
+	case PF_XMMI64_INSTRUCTIONS_AVAILABLE:
+	case PF_NX_ENABLED:
+		result = 1;
+		break;
+	default:
+		// We forcefully disable PF_FASTFAIL_AVAILABLE (23) and AVX to prevent
+		// the CRT from taking aggressive hardware/security paths.
+		result = 0;
+		break;
 	}
 
-	printf("	[API] Called IsProcessorFeaturePresent (Feature: %u) -> %s\n", 
-		   (unsigned int)ProcessorFeature, result ? "TRUE" : "FALSE");
+	printf("	[API] Called IsProcessorFeaturePresent (Feature: %u) -> %s\n", (unsigned int)ProcessorFeature, result ? "TRUE" : "FALSE");
 
 	return result;
 }

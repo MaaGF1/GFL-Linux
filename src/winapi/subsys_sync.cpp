@@ -30,10 +30,10 @@ WIN_API DWORD Impl_InitializeCriticalSectionAndSpinCount(void *lpCriticalSection
 	pthread_mutex_init((pthread_mutex_t *)lpCriticalSection, &attr);
 	pthread_mutexattr_destroy(&attr);
 
-	// Print the action. (This might be called frequently during init, 
+	// Print the action. (This might be called frequently during init,
 	// but usually stabilizes during gameplay).
 	printf("	[API] InitializeCriticalSectionAndSpinCount (%p, SpinCount: %u)\n", lpCriticalSection, dwSpinCount);
-	
+
 	return 1; // TRUE
 }
 
@@ -58,51 +58,56 @@ WIN_API void Impl_DeleteCriticalSection(void *lpCriticalSection)
 }
 
 // Windows API: HANDLE CreateEventW(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName)
-WIN_API void* Impl_CreateEventW(void* lpEventAttributes, DWORD bManualReset, DWORD bInitialState, const uint16_t* lpName)
+WIN_API void *Impl_CreateEventW(void *lpEventAttributes, DWORD bManualReset, DWORD bInitialState, const uint16_t *lpName)
 {
 	// Allocate our custom event structure
-	WIN_EVENT* ev = (WIN_EVENT*)malloc(sizeof(WIN_EVENT));
-	if (!ev) return NULL;
+	WIN_EVENT *ev = (WIN_EVENT *)malloc(sizeof(WIN_EVENT));
+	if (!ev)
+		return NULL;
 
 	ev->magic = EVENT_MAGIC;
 	ev->manual_reset = bManualReset;
 	ev->is_signaled = bInitialState;
-	
+
 	pthread_mutex_init(&ev->mutex, NULL);
 	pthread_cond_init(&ev->cond, NULL);
 
 	// Optional: Extract name for debugging if lpName is not NULL
 	char name_buf[128] = "Unnamed";
-	if (lpName) {
+	if (lpName)
+	{
 		WcharToAscii(lpName, name_buf, sizeof(name_buf));
 	}
 
-	printf("	[API] CreateEventW (Name: %s, Manual: %u, Signaled: %u) -> Handle: %p\n", 
-		   name_buf, bManualReset, bInitialState, ev);
-		   
+	printf("	[API] CreateEventW (Name: %s, Manual: %u, Signaled: %u) -> Handle: %p\n", name_buf, bManualReset, bInitialState, ev);
+
 	return ev;
 }
 
 // Windows API: BOOL SetEvent(HANDLE hEvent)
-WIN_API DWORD Impl_SetEvent(void* hEvent)
+WIN_API DWORD Impl_SetEvent(void *hEvent)
 {
-	if (!hEvent) return 0;
-	WIN_EVENT* ev = (WIN_EVENT*)hEvent;
+	if (!hEvent)
+		return 0;
+	WIN_EVENT *ev = (WIN_EVENT *)hEvent;
 
 	if (ev->magic == EVENT_MAGIC)
 	{
 		pthread_mutex_lock(&ev->mutex);
 		ev->is_signaled = 1;
-		
-		if (ev->manual_reset) {
+
+		if (ev->manual_reset)
+		{
 			// Wake ALL waiting threads
 			pthread_cond_broadcast(&ev->cond);
-		} else {
+		}
+		else
+		{
 			// Wake ONLY ONE waiting thread (Auto-reset)
 			pthread_cond_signal(&ev->cond);
 		}
 		pthread_mutex_unlock(&ev->mutex);
-		
+
 		// Note: SetEvent is called extremely often, better to keep printing disabled or minimal
 		// printf("	[API] SetEvent (%p)\n", hEvent);
 		return 1; // TRUE
@@ -111,10 +116,11 @@ WIN_API DWORD Impl_SetEvent(void* hEvent)
 }
 
 // Windows API: BOOL ResetEvent(HANDLE hEvent)
-WIN_API DWORD Impl_ResetEvent(void* hEvent)
+WIN_API DWORD Impl_ResetEvent(void *hEvent)
 {
-	if (!hEvent) return 0;
-	WIN_EVENT* ev = (WIN_EVENT*)hEvent;
+	if (!hEvent)
+		return 0;
+	WIN_EVENT *ev = (WIN_EVENT *)hEvent;
 
 	if (ev->magic == EVENT_MAGIC)
 	{

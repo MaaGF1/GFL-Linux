@@ -19,7 +19,7 @@ WIN_API void Impl_SetLastError(DWORD dwErrCode);
 WIN_API DWORD Impl_IsProcessorFeaturePresent(DWORD ProcessorFeature);
 
 WIN_API uint16_t *Impl_GetEnvironmentStringsW();
-WIN_API DWORD  Impl_FreeEnvironmentStringsW(uint16_t *penv);
+WIN_API DWORD Impl_FreeEnvironmentStringsW(uint16_t *penv);
 
 WIN_API DWORD Impl_TlsAlloc();
 WIN_API void *Impl_TlsGetValue(DWORD dwTlsIndex);

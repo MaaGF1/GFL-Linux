@@ -116,22 +116,23 @@ WIN_API uint16_t *Impl_GetCommandLineW()
 }
 
 // Windows API: BOOL CloseHandle(HANDLE hObject)
-WIN_API DWORD Impl_CloseHandle(void* hObject)
+WIN_API DWORD Impl_CloseHandle(void *hObject)
 {
-	if (!hObject) return 1; // Sometimes they pass NULL, just return TRUE
+	if (!hObject)
+		return 1; // Sometimes they pass NULL, just return TRUE
 
 	// 1. Check if it's one of our Events
-	WIN_EVENT* ev = (WIN_EVENT*)hObject;
+	WIN_EVENT *ev = (WIN_EVENT *)hObject;
 	if (ev->magic == EVENT_MAGIC)
 	{
 		// Destroy Linux primitives and free memory
 		pthread_mutex_destroy(&ev->mutex);
 		pthread_cond_destroy(&ev->cond);
-		
+
 		// Overwrite magic to prevent Use-After-Free bugs
-		ev->magic = 0; 
+		ev->magic = 0;
 		free(ev);
-		
+
 		printf("	[API] CloseHandle (Destroyed Event: %p)\n", hObject);
 		return 1; // TRUE
 	}
