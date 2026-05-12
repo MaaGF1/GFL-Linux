@@ -94,6 +94,10 @@ typedef union _SLIST_HEADER
 #define PF_ARM_EXTERNAL_CACHE_AVAILABLE     26
 #define PF_ARM_FMAC_INSTRUCTIONS_AVAILABLE  27
 
+// =========================================================================
+// Windows Virtual Memory Constants & Structures
+// =========================================================================
+
 // Windows Page Protection Flags
 #define PAGE_NOACCESS          0x01
 #define PAGE_READONLY          0x02
@@ -107,6 +111,24 @@ typedef union _SLIST_HEADER
 // Windows Allocation Type Flags
 #define MEM_COMMIT             0x00001000
 #define MEM_RESERVE            0x00002000
+#define MEM_DECOMMIT           0x00004000
+#define MEM_RELEASE            0x00008000
+#define MEM_FREE               0x00010000
+#define MEM_PRIVATE            0x00020000
+
+// Exact 48-byte struct for Windows x64 ABI
+typedef struct _MEMORY_BASIC_INFORMATION
+{
+    void*  BaseAddress;
+    void*  AllocationBase;
+    DWORD  AllocationProtect;
+    DWORD  __alignment1;
+    size_t RegionSize;
+    DWORD  State;
+    DWORD  Protect;
+    DWORD  Type;
+    DWORD  __alignment2;
+} MEMORY_BASIC_INFORMATION;
 
 #ifdef __cplusplus
 }
