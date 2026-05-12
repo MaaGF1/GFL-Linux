@@ -411,11 +411,11 @@ int main(int argc, char **argv)
 					snprintf(ord_buf, sizeof(ord_buf), "Ordinal_%llu", (unsigned long long)(orig_thunk[i].u1.Ordinal & 0xFFFF));
 
 					// Thunk replace, if we implement it, use real
-                    void* thunk = FindRealThunkByName(ord_buf);
+					void *thunk = FindRealThunkByName(ord_buf);
 					// Otherwise, use dummy thunk
-                    if (!thunk)
+					if (!thunk)
 						thunk = FindThunkByName(ord_buf);
-                    if (thunk)
+					if (thunk)
 						first_thunk[i].u1.Function = (QWORD)thunk;
 				}
 				// By name

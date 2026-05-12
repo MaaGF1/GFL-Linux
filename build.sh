@@ -118,8 +118,16 @@ function cf()
 {
     cd ${ProjectPath}
     echo_info "run Clang-Format."
-    find src -name '*.cpp' -o -name '*.h' | \
-        xargs -I{} bash -c 'clang-format-16 -style=file {} | diff -u -L "{}" -L "{}" {} -' > .clang-format.diff
+
+    # Exclude list
+    local exclude=(
+        "src/abi/autogen_stubs.h"
+        "src/include/windows.h"
+    )
+
+    find src \( -name '*.cpp' -o -name '*.h' \) \
+        | grep -v -F -f <(printf "%s\n" "${exclude[@]}") \
+        | xargs -r -I{} bash -c 'clang-format-16 -style=file {} | diff -u -L "{}" -L "{}" {} -' > .clang-format.diff
 }
 
 #################### Section 4 : Main ####################
