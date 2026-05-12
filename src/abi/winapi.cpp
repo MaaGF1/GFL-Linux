@@ -644,6 +644,110 @@ WIN_API DWORD Impl_IsProcessorFeaturePresent(DWORD ProcessorFeature)
 	return result;
 }
 
+// Windows API: HANDLE CreateEventW(LPSECURITY_ATTRIBUTES lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName)
+WIN_API void* Impl_CreateEventW(void* lpEventAttributes, DWORD bManualReset, DWORD bInitialState, const uint16_t* lpName)
+{
+	// Allocate our custom event structure
+	WIN_EVENT* ev = (WIN_EVENT*)malloc(sizeof(WIN_EVENT));
+	if (!ev) return NULL;
+
+	ev->magic = EVENT_MAGIC;
+	ev->manual_reset = bManualReset;
+	ev->is_signaled = bInitialState;
+	
+	pthread_mutex_init(&ev->mutex, NULL);
+	pthread_cond_init(&ev->cond, NULL);
+
+	// Optional: Extract name for debugging if lpName is not NULL
+	char name_buf[128] = "Unnamed";
+	if (lpName) {
+		WcharToAscii(lpName, name_buf, sizeof(name_buf));
+	}
+
+	printf("	[API] CreateEventW (Name: %s, Manual: %u, Signaled: %u) -> Handle: %p\n", 
+		   name_buf, bManualReset, bInitialState, ev);
+		   
+	return ev;
+}
+
+// Windows API: BOOL SetEvent(HANDLE hEvent)
+WIN_API DWORD Impl_SetEvent(void* hEvent)
+{
+	if (!hEvent) return 0;
+	WIN_EVENT* ev = (WIN_EVENT*)hEvent;
+
+	if (ev->magic == EVENT_MAGIC)
+	{
+		pthread_mutex_lock(&ev->mutex);
+		ev->is_signaled = 1;
+		
+		if (ev->manual_reset) {
+			// Wake ALL waiting threads
+			pthread_cond_broadcast(&ev->cond);
+		} else {
+			// Wake ONLY ONE waiting thread (Auto-reset)
+			pthread_cond_signal(&ev->cond);
+		}
+		pthread_mutex_unlock(&ev->mutex);
+		
+		// Note: SetEvent is called extremely often, better to keep printing disabled or minimal
+		// printf("	[API] SetEvent (%p)\n", hEvent);
+		return 1; // TRUE
+	}
+	return 0; // FALSE
+}
+
+// Windows API: BOOL ResetEvent(HANDLE hEvent)
+WIN_API DWORD Impl_ResetEvent(void* hEvent)
+{
+	if (!hEvent) return 0;
+	WIN_EVENT* ev = (WIN_EVENT*)hEvent;
+
+	if (ev->magic == EVENT_MAGIC)
+	{
+		pthread_mutex_lock(&ev->mutex);
+		ev->is_signaled = 0;
+		pthread_mutex_unlock(&ev->mutex);
+		return 1; // TRUE
+	}
+	return 0; // FALSE
+}
+
+// Windows API: BOOL CloseHandle(HANDLE hObject)
+WIN_API DWORD Impl_CloseHandle(void* hObject)
+{
+	if (!hObject) return 1; // Sometimes they pass NULL, just return TRUE
+
+	// 1. Check if it's one of our Events
+	WIN_EVENT* ev = (WIN_EVENT*)hObject;
+	if (ev->magic == EVENT_MAGIC)
+	{
+		// Destroy Linux primitives and free memory
+		pthread_mutex_destroy(&ev->mutex);
+		pthread_cond_destroy(&ev->cond);
+		
+		// Overwrite magic to prevent Use-After-Free bugs
+		ev->magic = 0; 
+		free(ev);
+		
+		printf("	[API] CloseHandle (Destroyed Event: %p)\n", hObject);
+		return 1; // TRUE
+	}
+
+	// 2. Check if it's one of our standard output handles (stdin/stdout)
+	uintptr_t handle_val = (uintptr_t)hObject;
+	if (handle_val >= (uintptr_t)STD_HANDLE_BASE && handle_val <= (uintptr_t)STD_HANDLE_BASE + 2)
+	{
+		printf("	[API] CloseHandle (Ignored Standard I/O Handle: %p)\n", hObject);
+		return 1; // TRUE
+	}
+
+	// If we don't know what it is, just pretend we closed it successfully.
+	// In a mature loader, you'd maintain a global Handle Table.
+	printf("	[API] CloseHandle (Unknown Handle: %p)\n", hObject);
+	return 1; // TRUE
+}
+
 /**
  * ====================================================================================================
  * @section III: Hook Table for Loader
@@ -684,6 +788,10 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"InitializeSListHead", (void *)Impl_InitializeSListHead},
 	{"GetModuleHandleW", (void *)Impl_GetModuleHandleW},
 	{"IsProcessorFeaturePresent", (void*)Impl_IsProcessorFeaturePresent},
+	{"CreateEventW", (void*)Impl_CreateEventW},
+	{"SetEvent", (void*)Impl_SetEvent},
+	{"ResetEvent", (void*)Impl_ResetEvent},
+	{"CloseHandle", (void*)Impl_CloseHandle},
 	{0, 0} // Terminator
 };
 // clang-format on
