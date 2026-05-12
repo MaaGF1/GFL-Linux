@@ -311,8 +311,6 @@ WIN_API DWORD Impl_FreeLibrary(void *hLibModule)
 	return 1; // Still return TRUE for compatibility
 }
 
-#define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
-
 // Windows API: DWORD TlsAlloc(void)
 WIN_API DWORD Impl_TlsAlloc()
 {

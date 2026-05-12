@@ -50,6 +50,8 @@ typedef struct _STARTUPINFOW
 #define FILE_TYPE_PIPE      0x0003
 #define FILE_TYPE_REMOTE    0x8000
 
+#define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
+
 #ifdef __cplusplus
 }
 #endif
