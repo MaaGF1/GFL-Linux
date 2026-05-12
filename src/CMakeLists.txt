@@ -1,9 +1,12 @@
 # Gather source files
+FILE(GLOB WINAPI_SOURCES "winapi/*.cpp")
+
 SET(SOURCES
     main.cpp
     # ABI
     abi/autogen_stubs.S
-    abi/winapi.cpp
+    # WinAPI Subsystems
+    ${WINAPI_SOURCES}
 )
 
 # Define executable
