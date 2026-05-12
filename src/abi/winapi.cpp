@@ -748,6 +748,51 @@ WIN_API DWORD Impl_CloseHandle(void* hObject)
 	return 1; // TRUE
 }
 
+// Windows API: DWORD GetModuleFileNameW(HMODULE hModule, LPWSTR lpFilename, DWORD nSize)
+WIN_API DWORD Impl_GetModuleFileNameW(void* hModule, uint16_t* lpFilename, DWORD nSize)
+{
+	if (lpFilename == NULL || nSize == 0) return 0;
+
+	char linux_path[1024];
+	ssize_t len = readlink("/proc/self/exe", linux_path, sizeof(linux_path) - 1);
+
+	if (len != -1)
+	{
+		linux_path[len] = '\0';
+	}
+	else
+	{
+		// Fallback if readlink fails
+		strncpy(linux_path, "/gfl_loader", sizeof(linux_path));
+	}
+
+	// We format it as a fake Windows path (e.g. Z:\path\to\loader)
+	// Wine uses 'Z:' to map the Linux root directory '/'.
+	// Note: We replace '/' with '\' to make Windows path parsers happy.
+	char win_path[1024];
+	snprintf(win_path, sizeof(win_path), "Z:%s", linux_path);
+
+	for (int i = 0; win_path[i] != '\0'; i++)
+	{
+		if (win_path[i] == '/')
+		{
+			win_path[i] = '\\';
+		}
+	}
+
+	// Convert ASCII to UTF-16
+	DWORD chars_copied = 0;
+	while (win_path[chars_copied] != '\0' && chars_copied < nSize - 1)
+	{
+		lpFilename[chars_copied] = (uint16_t)(unsigned char)win_path[chars_copied];
+		chars_copied++;
+	}
+	lpFilename[chars_copied] = 0; // Null terminator
+
+	printf("	[API] Called GetModuleFileNameW -> %s\n", win_path);
+	return chars_copied;
+}
+
 /**
  * ====================================================================================================
  * @section III: Hook Table for Loader
@@ -792,6 +837,7 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"SetEvent", (void*)Impl_SetEvent},
 	{"ResetEvent", (void*)Impl_ResetEvent},
 	{"CloseHandle", (void*)Impl_CloseHandle},
+	{"GetModuleFileNameW", (void*)Impl_GetModuleFileNameW},
 	{0, 0} // Terminator
 };
 // clang-format on
