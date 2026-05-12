@@ -578,48 +578,69 @@ WIN_API DWORD Impl_IsValidCodePage(DWORD CodePage)
 // Windows API: void InitializeSListHead(PSLIST_HEADER ListHead)
 WIN_API void Impl_InitializeSListHead(PSLIST_HEADER ListHead)
 {
-    if (ListHead)
-    {
-        memset(ListHead, 0, sizeof(SLIST_HEADER));
-    }
-    printf("    [API] InitializeSListHead (%p)\n", ListHead);
+	if (ListHead)
+	{
+		memset(ListHead, 0, sizeof(SLIST_HEADER));
+	}
+	printf("	[API] InitializeSListHead (%p)\n", ListHead);
 }
 
 // Windows API: HMODULE GetModuleHandleW(LPCWSTR lpModuleName)
 WIN_API void *Impl_GetModuleHandleW(const uint16_t *lpModuleName)
 {
-    // If lpModuleName is NULL, return the base address of the main module
-    if (lpModuleName == NULL)
-    {
-        printf("    [API] GetModuleHandleW (NULL) -> Main Module %p\n", g_mapped_base);
-        return g_mapped_base;
-    }
+	// If lpModuleName is NULL, return the base address of the main module
+	if (lpModuleName == NULL)
+	{
+		printf("	[API] GetModuleHandleW (NULL) -> Main Module %p\n", g_mapped_base);
+		return g_mapped_base;
+	}
 
-    // Convert wide string to ASCII for lookup
-    char module_name[256];
-    WcharToAscii(lpModuleName, module_name, sizeof(module_name));
+	// Convert wide string to ASCII for lookup
+	char module_name[256];
+	WcharToAscii(lpModuleName, module_name, sizeof(module_name));
 
-    // Search in virtual module tracker
-    for (int i = 0; i < g_virtual_module_count; i++)
-    {
-        if (strcasecmp(g_virtual_modules[i].name, module_name) == 0)
-        {
-            printf("    [API] GetModuleHandleW (%s) -> %p\n", module_name, g_virtual_modules[i].handle);
-            return g_virtual_modules[i].handle;
-        }
-    }
+	// Search in virtual module tracker (for dynamically loaded libs)
+	for (int i = 0; i < g_virtual_module_count; i++)
+	{
+		if (strcasecmp(g_virtual_modules[i].name, module_name) == 0)
+		{
+			printf("	[API] GetModuleHandleW (%s) -> Tracker Handle %p\n", module_name, g_virtual_modules[i].handle);
+			return g_virtual_modules[i].handle;
+		}
+	}
 
-    // Special case: if the requested name matches the main module (UnityPlayer.dll)
-    if (strcasecmp(module_name, "UnityPlayer.dll") == 0)
-    {
-        printf("    [API] GetModuleHandleW (%s) -> Main Module %p\n", module_name, g_mapped_base);
-        return g_mapped_base;
-    }
+	// [THE MAGIC HACK]
+	// Core Windows libraries (kernel32, ntdll, etc.) are heavily assumed to be present.
+	// The CRT WILL dereference the handle expecting a valid DOS/PE header ('MZ').
+	// By returning g_mapped_base (which points to a valid PE file), we prevent NULL pointer crashes!
+	printf("	[API] GetModuleHandleW (%s) -> Not found! Returning Universal Fake PE Handle %p\n", module_name, g_mapped_base);
+	return g_mapped_base;
+}
 
-    // Not found
-    printf("    [API] GetModuleHandleW (%s) -> NULL (not found)\n", module_name);
-    g_last_error = 126; // ERROR_MOD_NOT_FOUND
-    return NULL;
+
+// Windows API: BOOL IsProcessorFeaturePresent(DWORD ProcessorFeature)
+WIN_API DWORD Impl_IsProcessorFeaturePresent(DWORD ProcessorFeature)
+{
+	DWORD result = 0; // Default to FALSE
+
+	switch (ProcessorFeature)
+	{
+		case 6:  // PF_XMMI_INSTRUCTIONS_AVAILABLE (SSE)
+		case 10: // PF_XMMI64_INSTRUCTIONS_AVAILABLE (SSE2 - Mandatory for x86_64)
+		case 12: // PF_NX_ENABLED (Data Execution Prevention)
+			result = 1;
+			break;
+		default:
+			// We forcefully disable PF_FASTFAIL_AVAILABLE (23) and AVX to prevent 
+			// the CRT from taking aggressive hardware/security paths.
+			result = 0;
+			break;
+	}
+
+	printf("	[API] Called IsProcessorFeaturePresent (Feature: %u) -> %s\n", 
+		   (unsigned int)ProcessorFeature, result ? "TRUE" : "FALSE");
+		   
+	return result;
 }
 
 /**
@@ -661,6 +682,7 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"IsValidCodePage", (void*)Impl_IsValidCodePage},
 	{"InitializeSListHead", (void *)Impl_InitializeSListHead},
 	{"GetModuleHandleW", (void *)Impl_GetModuleHandleW},
+	{"IsProcessorFeaturePresent", (void*)Impl_IsProcessorFeaturePresent},
 	{0, 0} // Terminator
 };
 // clang-format on

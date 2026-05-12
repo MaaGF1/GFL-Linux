@@ -64,6 +64,36 @@ typedef union _SLIST_HEADER
 
 #define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
 
+// =========================================================================
+// Processor Features (for IsProcessorFeaturePresent)
+// =========================================================================
+#define PF_FLOATING_POINT_PRECISION_ERRATA  0
+#define PF_FLOATING_POINT_EMULATED          1
+#define PF_COMPARE_EXCHANGE_DOUBLE          2  // cmpxchg8b
+#define PF_MMX_INSTRUCTIONS_AVAILABLE       3
+#define PF_XMMI_INSTRUCTIONS_AVAILABLE      6  // SSE
+#define PF_3DNOW_INSTRUCTIONS_AVAILABLE     7
+#define PF_RDTSC_INSTRUCTION_AVAILABLE      8
+#define PF_PAE_ENABLED                      9
+#define PF_XMMI64_INSTRUCTIONS_AVAILABLE    10 // SSE2
+#define PF_SSE_DAZ_MODE_AVAILABLE           11
+#define PF_NX_ENABLED                       12 // Data Execution Prevention
+#define PF_SSE3_INSTRUCTIONS_AVAILABLE      13
+#define PF_COMPARE_EXCHANGE128              14 // cmpxchg16b
+#define PF_COMPARE64_EXCHANGE128            15
+#define PF_CHANNELS_ENABLED                 16
+#define PF_XSAVE_ENABLED                    17
+#define PF_ARM_VFP_32_REGISTERS_AVAILABLE   18
+#define PF_ARM_NEON_INSTRUCTIONS_AVAILABLE  19
+#define PF_SECOND_LEVEL_ADDRESS_TRANSLATION 20
+#define PF_VIRT_FIRMWARE_ENABLED            21
+#define PF_RDWRFSGSBASE_AVAILABLE           22
+#define PF_FASTFAIL_AVAILABLE               23
+#define PF_ARM_DIVIDE_INSTRUCTION_AVAILABLE 24
+#define PF_ARM_64BIT_LOADSTORE_ATOMIC       25
+#define PF_ARM_EXTERNAL_CACHE_AVAILABLE     26
+#define PF_ARM_FMAC_INSTRUCTIONS_AVAILABLE  27
+
 #ifdef __cplusplus
 }
 #endif
