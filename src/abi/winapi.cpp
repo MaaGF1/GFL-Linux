@@ -15,6 +15,8 @@
 static thread_local DWORD g_last_error = 0;
 // Access main module base address from main.cpp
 extern BYTE *g_mapped_base;
+// Get environ
+extern char **environ;
 
 /**
  * ====================================================================================================
@@ -73,6 +75,20 @@ static void *GetOrRegisterVirtualModule(const char *name)
 	}
 
 	return NULL; // Tracker full
+}
+
+/**
+ * @subsection 1.3 ASCII to UTF-16 String conversion (Helper)
+ */
+static void AsciiToWchar(const char *str, uint16_t *wstr, size_t max_chars)
+{
+	size_t i = 0;
+	while (str[i] != '\0' && i < max_chars - 1)
+	{
+		wstr[i] = (uint16_t)(unsigned char)str[i];
+		i++;
+	}
+	wstr[i] = 0;
 }
 
 /**
@@ -793,6 +809,57 @@ WIN_API DWORD Impl_GetModuleFileNameW(void* hModule, uint16_t* lpFilename, DWORD
 	return chars_copied;
 }
 
+// Windows API: LPWCH GetEnvironmentStringsW(void)
+WIN_API uint16_t *Impl_GetEnvironmentStringsW()
+{
+	// 1. Calculate total buffer size needed
+	size_t total_chars = 0;
+	if (environ != NULL)
+	{
+		for (int i = 0; environ[i] != NULL; i++)
+		{
+			total_chars += strlen(environ[i]) + 1; // +1 for the null terminator of each string
+		}
+	}
+	total_chars += 1; // +1 for the final double-null terminator
+
+	// 2. Allocate memory (must be freed by FreeEnvironmentStringsW)
+	// We use calloc to ensure it's zeroed out (handles the double-null naturally)
+	uint16_t *env_block = (uint16_t *)calloc(total_chars, sizeof(uint16_t));
+	if (!env_block)
+	{
+		printf("	[!!!] GetEnvironmentStringsW: Memory allocation failed!\n");
+		return NULL;
+	}
+
+	// 3. Copy standard Linux environment variables to the Windows buffer
+	size_t current_offset = 0;
+	if (environ != NULL)
+	{
+		for (int i = 0; environ[i] != NULL; i++)
+		{
+			size_t len = strlen(environ[i]);
+			AsciiToWchar(environ[i], &env_block[current_offset], len + 1);
+			current_offset += len + 1;
+		}
+	}
+
+	// The block is already zeroed by calloc, so the final '\0' is inherently present.
+	printf("	[API] Called GetEnvironmentStringsW -> Allocated Block: %p\n", env_block);
+	return env_block;
+}
+
+// Windows API: BOOL FreeEnvironmentStringsW(LPWCH penv)
+WIN_API DWORD Impl_FreeEnvironmentStringsW(uint16_t *penv)
+{
+	if (penv)
+	{
+		free(penv);
+	}
+	printf("	[API] Called FreeEnvironmentStringsW (%p)\n", penv);
+	return 1; // TRUE
+}
+
 /**
  * ====================================================================================================
  * @section III: Hook Table for Loader
@@ -838,6 +905,8 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"ResetEvent", (void*)Impl_ResetEvent},
 	{"CloseHandle", (void*)Impl_CloseHandle},
 	{"GetModuleFileNameW", (void*)Impl_GetModuleFileNameW},
+	{"GetEnvironmentStringsW", (void*)Impl_GetEnvironmentStringsW},
+	{"FreeEnvironmentStringsW", (void*)Impl_FreeEnvironmentStringsW},
 	{0, 0} // Terminator
 };
 // clang-format on
