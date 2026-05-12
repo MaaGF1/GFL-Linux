@@ -621,13 +621,14 @@ WIN_API void *Impl_GetModuleHandleW(const uint16_t *lpModuleName)
 // Windows API: BOOL IsProcessorFeaturePresent(DWORD ProcessorFeature)
 WIN_API DWORD Impl_IsProcessorFeaturePresent(DWORD ProcessorFeature)
 {
-	DWORD result = 0; // Default to FALSE
+	// Default to FALSE
+	DWORD result = 0;
 
 	switch (ProcessorFeature)
 	{
-		case 6:  // PF_XMMI_INSTRUCTIONS_AVAILABLE (SSE)
-		case 10: // PF_XMMI64_INSTRUCTIONS_AVAILABLE (SSE2 - Mandatory for x86_64)
-		case 12: // PF_NX_ENABLED (Data Execution Prevention)
+		case PF_XMMI_INSTRUCTIONS_AVAILABLE:
+		case PF_XMMI64_INSTRUCTIONS_AVAILABLE:
+		case PF_NX_ENABLED:
 			result = 1;
 			break;
 		default:
@@ -639,7 +640,7 @@ WIN_API DWORD Impl_IsProcessorFeaturePresent(DWORD ProcessorFeature)
 
 	printf("	[API] Called IsProcessorFeaturePresent (Feature: %u) -> %s\n", 
 		   (unsigned int)ProcessorFeature, result ? "TRUE" : "FALSE");
-		   
+
 	return result;
 }
 
