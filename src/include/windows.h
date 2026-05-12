@@ -94,6 +94,20 @@ typedef union _SLIST_HEADER
 #define PF_ARM_EXTERNAL_CACHE_AVAILABLE     26
 #define PF_ARM_FMAC_INSTRUCTIONS_AVAILABLE  27
 
+// Windows Page Protection Flags
+#define PAGE_NOACCESS          0x01
+#define PAGE_READONLY          0x02
+#define PAGE_READWRITE         0x04
+#define PAGE_WRITECOPY         0x08
+#define PAGE_EXECUTE           0x10
+#define PAGE_EXECUTE_READ      0x20
+#define PAGE_EXECUTE_READWRITE 0x40
+#define PAGE_EXECUTE_WRITECOPY 0x80
+
+// Windows Allocation Type Flags
+#define MEM_COMMIT             0x00001000
+#define MEM_RESERVE            0x00002000
+
 #ifdef __cplusplus
 }
 #endif

@@ -984,6 +984,62 @@ WIN_API int Impl_WideCharToMultiByte(
 	return bytes_written;
 }
 
+// Windows API: LPVOID VirtualAlloc(LPVOID lpAddress, SIZE_T dwSize, DWORD flAllocationType, DWORD flProtect)
+WIN_API void* Impl_VirtualAlloc(void* lpAddress, size_t dwSize, DWORD flAllocationType, DWORD flProtect)
+{
+	int linux_prot = PROT_NONE;
+
+	// 1. Map Windows protection flags to Linux PROT_* flags
+	// We mask out modifiers (like PAGE_GUARD) by checking the primary bits
+	if (flProtect & PAGE_EXECUTE_READWRITE)
+	{
+		linux_prot = PROT_READ | PROT_WRITE | PROT_EXEC;
+	}
+	else if (flProtect & PAGE_EXECUTE_READ)
+	{
+		linux_prot = PROT_READ | PROT_EXEC;
+	}
+	else if (flProtect & PAGE_EXECUTE)
+	{
+		linux_prot = PROT_EXEC;
+	}
+	else if (flProtect & PAGE_READWRITE)
+	{
+		linux_prot = PROT_READ | PROT_WRITE;
+	}
+	else if (flProtect & PAGE_READONLY)
+	{
+		linux_prot = PROT_READ;
+	}
+	else if (flProtect == PAGE_NOACCESS)
+	{
+		linux_prot = PROT_NONE;
+	}
+	else
+	{
+		// Fallback for edge cases (e.g., PAGE_WRITECOPY)
+		linux_prot = PROT_READ | PROT_WRITE;
+	}
+
+	int linux_flags = MAP_PRIVATE | MAP_ANONYMOUS;
+
+	// 2. Handle memory allocation
+	// If lpAddress is provided, Windows attempts to allocate at that specific address.
+	// In mmap, providing an address is just a "hint" unless MAP_FIXED is used.
+	// We avoid MAP_FIXED because it overwrites existing memory if it overlaps, which is dangerous.
+	void* ptr = mmap(lpAddress, dwSize, linux_prot, linux_flags, -1, 0);
+
+	if (ptr == MAP_FAILED)
+	{
+		g_last_error = 8; // ERROR_NOT_ENOUGH_MEMORY
+		printf("	[API] VirtualAlloc (Size: %zu, Prot: 0x%X) -> FAILED!\n", dwSize, (unsigned int)flProtect);
+		return NULL;
+	}
+
+	printf("	[API] VirtualAlloc (Size: %zu, Prot: 0x%X) -> Allocated at %p\n", dwSize, (unsigned int)flProtect, ptr);
+	return ptr;
+}
+
 /**
  * ====================================================================================================
  * @section III: Hook Table for Loader
@@ -1032,6 +1088,7 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"GetEnvironmentStringsW", (void*)Impl_GetEnvironmentStringsW},
 	{"FreeEnvironmentStringsW", (void*)Impl_FreeEnvironmentStringsW},
 	{"WideCharToMultiByte", (void*)Impl_WideCharToMultiByte},
+	{"VirtualAlloc", (void*)Impl_VirtualAlloc},
 	{0, 0} // Terminator
 };
 // clang-format on

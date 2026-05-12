@@ -21,6 +21,7 @@
 #include <fcntl.h>
 #include <sys/time.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 
 #include "../include/type.h"
 #include "../include/windows.h"
