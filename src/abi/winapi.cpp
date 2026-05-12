@@ -547,6 +547,32 @@ WIN_API uint16_t *Impl_GetCommandLineW()
 	return wcmdline;
 }
 
+// Windows API: UINT GetACP(void)
+WIN_API DWORD Impl_GetACP()
+{
+	// By returning 65001 (UTF-8), we tell the Windows CRT to treat all standard 
+	// "ANSI" strings as UTF-8. This matches Linux's native encoding perfectly!
+	printf("	[API] Called GetACP -> Returning %d (CP_UTF8)\n", CP_UTF8);
+	return CP_UTF8;
+}
+
+// Windows API: UINT GetOEMCP(void)
+WIN_API DWORD Impl_GetOEMCP()
+{
+	// OEM Code Page (used for old console apps). Same as ACP for our purposes.
+	printf("	[API] Called GetOEMCP -> Returning %d (CP_UTF8)\n", CP_UTF8);
+	return CP_UTF8;
+}
+
+// Windows API: BOOL IsValidCodePage(UINT CodePage)
+WIN_API DWORD Impl_IsValidCodePage(DWORD CodePage)
+{
+	// Pretend that whatever code page the engine asks for is valid, 
+	// to prevent it from crashing or throwing exceptions.
+	printf("	[API] Called IsValidCodePage (%u)\n", CodePage);
+	return 1; // TRUE
+}
+
 /**
  * ====================================================================================================
  * @section III: Hook Table for Loader
@@ -581,6 +607,9 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"GetFileType", (void *)Impl_GetFileType},
 	{"GetCommandLineA", (void *)Impl_GetCommandLineA},
 	{"GetCommandLineW", (void *)Impl_GetCommandLineW},
+	{"GetACP", (void*)Impl_GetACP},
+	{"GetOEMCP", (void*)Impl_GetOEMCP},
+	{"IsValidCodePage", (void*)Impl_IsValidCodePage},
 	{0, 0} // Terminator
 };
 // clang-format on
