@@ -81,9 +81,9 @@
 // Global States
 extern thread_local DWORD g_last_error;
 // Provided by main.cpp
-extern BYTE* g_mapped_base;
+extern BYTE *g_mapped_base;
 // Provided by Linux libc
-extern char** environ;
+extern char **environ;
 
 // Core Utility Functions
 void WcharToAscii(const uint16_t *wstr, char *out_buf, size_t max_len);

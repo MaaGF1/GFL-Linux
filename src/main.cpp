@@ -28,7 +28,7 @@
 #include <sys/syscall.h>
 
 #include "abi/autogen_stubs.h"
-#include "abi/winapi.h"
+#include "winapi/winapi_registry.h"
 
 // =========================================================================
 // PE64 Structures (1-byte packing)
