@@ -50,6 +50,18 @@ typedef struct _STARTUPINFOW
 #define FILE_TYPE_PIPE      0x0003
 #define FILE_TYPE_REMOTE    0x8000
 
+typedef union _SLIST_HEADER
+{
+    QWORD Alignment;
+    struct
+	{
+        QWORD Depth : 16;
+        QWORD Sequence : 48;
+        QWORD Reserved : 4;
+        QWORD NextEntry : 60;
+    } HeaderX64;
+} SLIST_HEADER, *PSLIST_HEADER;
+
 #define TLS_OUT_OF_INDEXES ((DWORD)0xFFFFFFFF)
 
 #ifdef __cplusplus

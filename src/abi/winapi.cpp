@@ -573,6 +573,16 @@ WIN_API DWORD Impl_IsValidCodePage(DWORD CodePage)
 	return 1; // TRUE
 }
 
+// Windows API: void InitializeSListHead(PSLIST_HEADER ListHead)
+WIN_API void Impl_InitializeSListHead(PSLIST_HEADER ListHead)
+{
+    if (ListHead)
+    {
+        memset(ListHead, 0, sizeof(SLIST_HEADER));
+    }
+    printf("    [API] InitializeSListHead (%p)\n", ListHead);
+}
+
 /**
  * ====================================================================================================
  * @section III: Hook Table for Loader
@@ -610,6 +620,7 @@ const REAL_API_ENTRY g_real_api_hooks[] = {
 	{"GetACP", (void*)Impl_GetACP},
 	{"GetOEMCP", (void*)Impl_GetOEMCP},
 	{"IsValidCodePage", (void*)Impl_IsValidCodePage},
+	{"InitializeSListHead", (void *)Impl_InitializeSListHead},
 	{0, 0} // Terminator
 };
 // clang-format on
